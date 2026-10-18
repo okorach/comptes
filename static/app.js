@@ -26,7 +26,7 @@ async function route(){
     else if (name === 'admin') await admin();
     else if (name === 'account') await account(decodeURIComponent(rest.join('/')));
     else await home();
-  } catch (e) { $('#main').innerHTML = `<div class="err">Erreur : ${esc(e.message)}</div>`; }
+  } catch (e) { const err = document.createElement('div'); err.className = 'err'; err.textContent = 'Erreur : ' + e.message; $('#main').replaceChildren(err); }
 }
 window.addEventListener('hashchange', route);
 
@@ -76,7 +76,7 @@ async function spending(){
 }
 function toggleCat(c, included){
   const set = new Set(SP.exclude || []); included ? set.delete(c) : set.add(c);
-  SP.exclude = [...set]; if (!SP.exclude.length) SP.exclude = ['']; spending();
+  SP.exclude = [...set]; if (!SP.exclude.length) SP.exclude = ['']; void spending();
 }
 
 /* ------------------------------------------------------------------ interests */
@@ -91,7 +91,7 @@ async function interests(msg = ''){
 }
 async function recalc(force){
   const r = await api('interests/recalc', 'POST', {force});
-  interests(`${r.n} comptes recalculés`);
+  await interests(`${r.n} comptes recalculés`);
 }
 
 /* ------------------------------------------------------------------ account */
@@ -106,7 +106,7 @@ async function account(id, msg = ''){
     : a.mode === 'shares' ? `<label>Nb de titres<input id="f_qty" size="10"></label><label>Prix unitaire<input id="f_px" size="10"></label>`
     : `<label>Montant (${cur})<input id="f_amt" size="12"></label>`;
   const importBanks = ['BoursoBank', 'ING', 'LCL', 'UBS', 'Revolut', 'Yuh', 'generic'];
-  $('#main').innerHTML = `<h2>${esc(a.id)} <span class="mut" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${a.currency} · ${a.status}${a.availability ? ' · dispo ' + a.availability : ''}</span></h2>
+  $('#main').innerHTML = `<h2>${esc(a.id)} <span class="mut" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
   <div class="row"><button onclick="location.hash='#/'">← Retour</button>
   <button onclick="setStatus('${jsq(a.id)}','${a.status === 'Open' ? 'Closed' : 'Open'}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
   <a href="/api/account/${enc(a.id)}/export.csv"><button>Exporter CSV</button></a>
@@ -144,11 +144,11 @@ async function saveTx(id){
     await account(id, 'Écriture enregistrée');
   } catch (e) { $('#form_err').textContent = e.message; }
 }
-async function delTx(tid, id){ if (confirm('Supprimer cette écriture ?')) { await api('transaction/' + tid, 'DELETE'); account(id, 'Écriture supprimée'); } }
-async function setStatus(id, status){ await api('account/' + enc(id), 'PUT', {status}); account(id); }
-async function recalcOne(id){ await api('interests/recalc', 'POST', {account: id}); account(id, 'Rendements recalculés'); }
-async function addDep(id){ try { await api('account/' + enc(id) + '/deposits', 'POST', {date: $('#d_date').value, amount: $('#d_amt').value}); account(id, 'Versement ajouté'); } catch (e) { alert(e.message); } }
-async function delDep(did, id){ await api('deposit/' + did, 'DELETE'); account(id); }
+async function delTx(tid, id){ if (confirm('Supprimer cette écriture ?')) { await api('transaction/' + tid, 'DELETE'); await account(id, 'Écriture supprimée'); } }
+async function setStatus(id, status){ await api('account/' + enc(id), 'PUT', {status}); await account(id); }
+async function recalcOne(id){ await api('interests/recalc', 'POST', {account: id}); await account(id, 'Rendements recalculés'); }
+async function addDep(id){ try { await api('account/' + enc(id) + '/deposits', 'POST', {date: $('#d_date').value, amount: $('#d_amt').value}); await account(id, 'Versement ajouté'); } catch (e) { alert(e.message); } }
+async function delDep(did, id){ await api('deposit/' + did, 'DELETE'); await account(id); }
 
 /* import */
 let IMPORT = null;
@@ -163,7 +163,7 @@ async function importPreview(id){
     <button class="primary" onclick="importCommit('${jsq(id)}')">Importer ${r.new.length} écritures</button>` : ''}<button onclick="$('#imp').innerHTML=''">Fermer</button></div>`;
   } catch (e) { $('#imp').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
-async function importCommit(id){ const r = await api('account/' + enc(id) + '/import', 'POST', {...IMPORT, commit: true}); account(id, `${r.new.length} écritures importées`); }
+async function importCommit(id){ const r = await api('account/' + enc(id) + '/import', 'POST', {...IMPORT, commit: true}); await account(id, `${r.new.length} écritures importées`); }
 
 /* ------------------------------------------------------------------ admin */
 async function admin(msg = ''){
@@ -183,13 +183,13 @@ async function admin(msg = ''){
   <label>Devise<select id="x_cur" onchange="fxList()">${m.currencies.filter(c => c !== 'EUR').map(c => `<option>${c}</option>`).join('')}</select></label>
   <label>Date<input type="date" id="x_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Taux<input id="x_rate" size="8"></label><button onclick="addFx()">Ajouter</button></div>
   <div id="fxl"></div></div>`;
-  fxList();
+  await fxList();
 }
 async function fxList(){
   const cur = $('#x_cur').value, rows = await api('fx?currency=' + cur);
   $('#fxl').innerHTML = `<table>${rows.slice(0, 12).map(r => `<tr><td>${r.date}</td><td class="n">${r.rate}</td></tr>`).join('')}</table>`;
 }
-async function addFx(){ try { await api('fx', 'POST', {currency: $('#x_cur').value, date: $('#x_date').value, rate: $('#x_rate').value.replace(',', '.')}); fxList(); } catch (e) { alert(e.message); } }
+async function addFx(){ try { await api('fx', 'POST', {currency: $('#x_cur').value, date: $('#x_date').value, rate: $('#x_rate').value.replace(',', '.')}); await fxList(); } catch (e) { alert(e.message); } }
 async function createAcc(){
   const v = i => $('#' + i).value;
   try {
@@ -198,4 +198,4 @@ async function createAcc(){
     location.hash = '#/account/' + enc(v('n_id').trim());
   } catch (e) { $('#n_err').textContent = e.message.includes('UNIQUE') ? 'Ce compte existe déjà' : e.message; }
 }
-route();
+void route();
