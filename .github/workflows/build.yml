@@ -26,7 +26,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run tests
-        run: python -m pytest --cov --cov-report=xml
+        run: python -m pytest --junitxml=build/ut.xml --cov --cov-report=xml:build/coverage.xml
 
       - name: Run ruff
         run: ruff check comptes tests
