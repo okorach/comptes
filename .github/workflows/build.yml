@@ -34,11 +34,12 @@ jobs:
           node-version: "22"
 
       - name: Run JavaScript tests
-        run: >
-          node --test --experimental-test-coverage
-          --test-reporter=spec --test-reporter-destination=stdout
-          --test-reporter=lcov --test-reporter-destination=build/lcov.info
-          tests/js/
+        run: |
+          mkdir -p build
+          node --test --experimental-test-coverage \
+          --test-reporter=spec --test-reporter-destination=stdout \
+          --test-reporter=lcov --test-reporter-destination=build/lcov.info \
+          "tests/js/*.test.js"
 
       - name: Run ruff
         run: ruff check comptes tests
