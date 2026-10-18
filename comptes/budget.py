@@ -59,7 +59,7 @@ def report(con, group="month", months=36, exclude=DEFAULT_EXCLUDE, today=None):
     start = f"{y:04d}-{m:02d}-01"
     spread = defaultdict(float); raw = defaultdict(float)
     cat_tot = defaultdict(float); matrix = defaultdict(lambda: defaultdict(float))
-    for d, acc, cat, sub, s, r, desc in spread_rows(con, today.isoformat()):
+    for d, _acc, cat, _sub, s, r, _desc in spread_rows(con, today.isoformat()):
         if cat in exclude or d < start:
             continue
         p = _period(d, group)

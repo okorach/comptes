@@ -26,10 +26,13 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run tests
-        run: ./run_tests.sh
+        run: python -m pytest --cov --cov-report=xml
 
-      - name: Run linters
-        run: ./run_linters.sh
+      - name: Run ruff
+        run: ruff check comptes tests
+
+      - name: Run pylint
+        run: pylint comptes tests
 
       - name: Set project version
         run: |

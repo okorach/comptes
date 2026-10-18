@@ -44,7 +44,7 @@ def rate_for_period(balances, deposits, start, end, period):
     def fv(r):
         p = (1 + r) ** (period / 365.0) - 1
         tot = opening * (1 + p) ** n_open
-        for n, amt, dd in deps:
+        for n, amt, _dd in deps:
             if n is None:
                 continue
             tot += amt if n <= 0 else amt * (1 + p) ** n
