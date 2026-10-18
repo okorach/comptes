@@ -1,3 +1,5 @@
 openpyxl
-coverage
-flake8
+pytest
+pytest-cov
+ruff
+pylint

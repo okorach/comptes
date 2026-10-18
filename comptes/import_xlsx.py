@@ -1,3 +1,4 @@
+# pylint: disable=line-too-long
 """One-time import of Comptes.xlsm into the SQLite database.
 
 Usage: python -m comptes.import_xlsx "D:\\Backup\\GDrive\\Banque\\Comptes.xlsm" [comptes.db]

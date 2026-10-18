@@ -1,0 +1,35 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.coverage.run]
+branch = true
+source = ["comptes"]
+
+[tool.ruff]
+line-length = 160
+extend-exclude = ["tests/smoke_api.py", "tests/verify_interest.py", "tests/verify_recompute.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E401", "E701", "E702", "E703", "E731", "E741", "E241", "E221"]
+
+[tool.ruff.lint.per-file-ignores]
+"comptes/import_xlsx.py" = ["E501"]
+
+[tool.pylint.main]
+ignore-paths = ["tests/smoke_api.py", "tests/verify_interest.py", "tests/verify_recompute.py"]
+init-hook = "import sys; sys.path.insert(0, '.')"
+
+[tool.pylint.format]
+max-line-length = 160
+
+[tool.pylint."messages control"]
+disable = [
+    "missing-module-docstring", "missing-class-docstring", "missing-function-docstring",
+    "multiple-statements", "multiple-imports", "invalid-name", "too-many-locals",
+    "too-many-arguments", "too-many-positional-arguments", "too-many-branches",
+    "too-many-statements", "too-few-public-methods", "too-many-return-statements",
+    "unnecessary-lambda-assignment", "import-outside-toplevel", "wrong-import-position",
+    "broad-exception-caught", "protected-access", "inconsistent-return-statements", "use-maxsplit-arg",
+]
