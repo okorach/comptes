@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS interests(
 );
 """
 
+
 def connect(path=None):
     con = sqlite3.connect(path or DEFAULT_DB)
     con.row_factory = sqlite3.Row

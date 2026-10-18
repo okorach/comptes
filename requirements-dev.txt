@@ -1,0 +1,3 @@
+openpyxl
+coverage
+flake8

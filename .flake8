@@ -1,0 +1,9 @@
+[flake8]
+max-line-length = 160
+extend-ignore = E401,E701,E702,E703,E731,E741,E241,E221,E272,W503
+exclude = .git,__pycache__
+per-file-ignores =
+    comptes/import_xlsx.py:E501
+    tests/smoke_api.py:E402,E302,E305,E501,E201
+    tests/verify_interest.py:E402
+    tests/verify_recompute.py:E402,E501
