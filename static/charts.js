@@ -23,13 +23,28 @@ let chartSeq = 0;
 
 const chartRightSide = s => s.axis === 'right';
 
-/* Scale of one vertical axis, fitted to the values of its series inside the time window */
-function chartAxisScale(c, list){
+/* Ticks of a secondary axis with exactly `count` intervals, so that its labels sit on the gridlines of the main axis:
+   the smallest round step for which [mn, mx] fits in `count` steps */
+function chartAlignedTicks(mn, mx, count){
+  const lo0 = Math.min(mn, 0), hi0 = Math.max(mx, 0), mag = Math.pow(10, Math.floor(Math.log10(Math.max(hi0 - lo0, 1e-9) / count)) - 1);
+  for (let step = mag; ; step *= 10){
+    for (const m of [1, 2, 2.5, 5]){
+      const st = m * step, below = Math.ceil(-lo0 / st - 1e-9), above = Math.ceil(hi0 / st - 1e-9);
+      if (below + above > count) continue;
+      const lo = -below * st;
+      return {ticks: Array.from({length: count + 1}, (_, j) => lo + j * st), lo, hi: lo + count * st, step: st};
+    }
+  }
+}
+
+/* Scale of one vertical axis, fitted to the values of its series inside the time window.
+   With `align` (the ticks of the main axis) the ticks are aligned on the ones of the main axis */
+function chartAxisScale(c, list, align){
   const vals = list.flatMap(s => s.values.slice(c.from, c.to + 1).filter(v => v != null));
   if (!vals.length) return null;
   let mn = Math.min(...vals), mx = Math.max(...vals);
   if (list.some(s => s.type === 'bar')) { mn = Math.min(mn, 0); mx = Math.max(mx, 0); }
-  const nt = niceTicks(mn, mx, c.opt.ticks || 5);
+  const nt = align ? chartAlignedTicks(mn, mx, align.ticks.length - 1) : niceTicks(mn, mx, c.opt.ticks || 5);
   return {nt, y: v => CHART_T + (nt.hi - v) * (c.height - CHART_T - CHART_B) / (nt.hi - nt.lo)};
 }
 
@@ -38,7 +53,7 @@ function chartScale(c){
   const {series, from, to} = c, n = to - from + 1, plotW = CHART_W - CHART_L - c.R;
   const left = chartAxisScale(c, c.R === CHART_R ? series : series.filter(s => !chartRightSide(s)));
   if (!left) return null;
-  const right = c.R === CHART_R ? null : chartAxisScale(c, series.filter(chartRightSide));
+  const right = c.R === CHART_R ? null : chartAxisScale(c, series.filter(chartRightSide), left.nt);
   return {
     left, right,
     of: s => (chartRightSide(s) && right) || left,

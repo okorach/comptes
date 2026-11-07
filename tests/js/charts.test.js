@@ -177,3 +177,31 @@ test('with a right axis the sliders and the hover use the wider right margin', (
   assert.match(c.drawChart(['a', 'b', 'c'], series), /margin:0 5\.60% 0 5\.60%/);
   assert.match(lineChart(3), /margin:0 1\.20% 0 5\.60%/);
 });
+
+test('chartAlignedTicks gives a round step with the requested number of intervals, starting at 0', () => {
+  const t = ctx.chartAlignedTicks(0, 26000, 4);
+  assert.deepEqual(Array.from(t.ticks), [0, 10000, 20000, 30000, 40000]);
+  assert.equal(t.step, 10000);
+  assert.equal(t.lo, 0);
+  assert.equal(t.hi, 40000);
+});
+
+test('chartAlignedTicks keeps negative values inside the range', () => {
+  const t = ctx.chartAlignedTicks(-3000, 9000, 4);
+  assert.ok(t.lo <= -3000 && t.hi >= 9000);
+  assert.equal(t.ticks.length, 5);
+});
+
+test('right axis labels sit on the gridlines of the left axis', () => {
+  const {ctx: c} = load();
+  const html = c.drawChart(['a', 'b', 'c', 'd'], [
+    {color: '#0a0', type: 'bar', axis: 'right', values: [0, 12000, 26000, 9000]},
+    {color: '#00f', type: 'line', values: [1000000, 1100000, 1250000, 2000000]}]);
+  const ys = re => [...html.matchAll(re)].map(m => Number(m[1]));
+  const grid = ys(/<line x1="56"[^>]*y1="([\d.]+)"/g);
+  const left = ys(/<text x="50" y="([\d.]+)"/g).map(v => v - 4);
+  const right = ys(/<text x="\d+" y="([\d.]+)" font-size="11" text-anchor="start"/g).map(v => v - 4);
+  assert.equal(right.length, grid.length);
+  right.forEach((y, j) => assert.ok(Math.abs(y - grid[j]) < 1e-6, `right label ${j} at ${y}, gridline at ${grid[j]}`));
+  left.forEach((y, j) => assert.ok(Math.abs(y - grid[j]) < 1e-6));
+});
