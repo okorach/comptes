@@ -111,3 +111,21 @@ test('monthlySavings is the average monthly growth over the previous 12 months, 
   assert.equal(ctx.monthlySavings([100, null, 300], 1)[2], null);
   assert.equal(ctx.monthlySavings([0, 1234, 1234, 4000], 1)[1], 1200);
 });
+
+test('monthlySavings is floored at 0 when the net worth decreases', () => {
+  const s = load().ctx.monthlySavings([5000, 1000, 1000, 3000], 1);
+  assert.equal(s[1], 0);
+  assert.equal(s[2], 0);
+  assert.equal(s[3], 2000);
+});
+
+test('the right axis of the home chart starts at 0 when the savings are floored at 0', () => {
+  const {ctx} = load();
+  const savings = ctx.monthlySavings([5000, 1000, 1000, 3000], 1);
+  const html = ctx.drawChart(['a', 'b', 'c', 'd'], [
+    {color: '#0a0', type: 'bar', axis: 'right', values: savings},
+    {color: '#00f', type: 'line', values: [5000, 1000, 1000, 3000]}]);
+  const labels = [...html.matchAll(/text-anchor="start"[^>]*>([^<]*)</g)].map(m => m[1]);
+  assert.equal(labels[0], '0');
+  assert.ok(labels.every(l => !l.startsWith('-')));
+});
