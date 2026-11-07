@@ -94,15 +94,14 @@ function toggleCat(c, included){
 /* ------------------------------------------------------------------ interests */
 async function interests(msg = ''){
   const rows = await api('interests');
-  const f = v => v == null ? '<span class="mut">–</span>' : `<span class="${v < 0 ? 'neg' : ''}">${pct(v)}</span>`;
   $('#main').innerHTML = `<h2>Rendements annualisés (nets d'impôt)</h2>
-  <div class="row"><button class="primary" onclick="recalc(false)">Recalculer (hors livrets à calcul annuel)</button><button onclick="recalc(true)">Tout recalculer</button><span class="ok">${msg}</span></div>
+  <div class="row"><button class="primary" onclick="recalc()">Recalculer</button><span class="ok">${msg}</span></div>
   <div class="mut" style="font-size:12px">Taux actuariel équivalent à l'ancien « Valeur cible » d'Excel : solde initial + versements capitalisés = solde final. Net = brut × (1 − fiscalité du compte).</div>
   <table><tr><th>Compte</th><th>Type</th><th>Calculé le</th><th class="n">1 an</th><th class="n">3 ans</th><th class="n">5 ans</th><th class="n">8 ans</th><th class="n">Depuis le début</th></tr>
-  ${rows.map(r => `<tr class="click" onclick="location.hash='#/account/${enc(r.account)}'"><td>${esc(r.account)}</td><td>${esc(r.type)}</td><td>${(r.calc_date || '').replace('T', ' ').slice(0, 16)}</td><td class="n">${f(r.y1)}</td><td class="n">${f(r.y3)}</td><td class="n">${f(r.y5)}</td><td class="n">${f(r.y8)}</td><td class="n">${f(r.y_all)}</td></tr>`).join('')}</table>`;
+  ${rows.map(interestRow).join('')}</table>`;
 }
-async function recalc(force){
-  const r = await api('interests/recalc', 'POST', {force});
+async function recalc(){
+  const r = await api('interests/recalc', 'POST', {force: true});
   await interests(`${r.n} comptes recalculés`);
 }
 
@@ -113,17 +112,34 @@ function txRow(t, foreign, aid){
   return `<tr><td>${esc(t.date)}</td><td class="n ${cls(t.amount_eur)}">${num(t.amount_eur)}</td><td class="n">${num(t.balance_eur)}</td>${native}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
   <td><button class="link" onclick="editTx(${esc(JSON.stringify(t))})">modifier</button><button class="link" onclick="delTx(${Number(t.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
 }
+const NATIVE_KEY = {y1: 'n1', y3: 'n3', y5: 'n5', y8: 'n8', y_all: 'n_all'};
 const INTEREST_PERIODS = [['1 an', 'y1'], ['3 ans', 'y3'], ['5 ans', 'y5'], ['8 ans', 'y8'], ['Depuis le début', 'y_all']];
-function interestsTable(interests){
+/* Yield in EUR, followed (in small) by the yield in the currency of the account, without the exchange rate effect */
+const nativeRateHtml = (native, currency) => {
+  if (native == null || !currency || currency === 'EUR') return '';
+  const neg = native < 0 ? 'neg' : '';
+  return ` <small class="mut ${neg}" title="Rendement en ${esc(currency)}, hors effet de change">${pct(native)} ${esc(currency)}</small>`;
+};
+const rateHtml = (v, native, currency) => {
+  if (v == null) return '<span class="mut">–</span>';
+  return `<span class="${v < 0 ? 'neg' : ''}">${pct(v)}</span>${nativeRateHtml(native, currency)}`;
+};
+const interestRow = r => {
+  const calc = (r.calc_date || '').replace('T', ' ').slice(0, 16);
+  return `<tr class="click" onclick="location.hash='#/account/${enc(r.account)}'"><td>${esc(r.account)}</td><td>${esc(r.type)}</td><td>${calc}</td>${rateCells(r)}</tr>`;
+};
+const rateCells = r => Object.entries(NATIVE_KEY).map(([y, n]) => `<td class="n">${rateHtml(r[y], r[n], r.currency)}</td>`).join('');
+
+function interestsTable(interests, currency){
   if (!interests) return '<div class="mut">Pas encore calculé</div>';
-  const rows = INTEREST_PERIODS.map(([l, k]) => `<tr><td>${l}</td><td class="n">${pct(interests[k])}</td></tr>`).join('');
+  const rows = INTEREST_PERIODS.map(([l, k]) => `<tr><td>${l}</td><td class="n">${rateHtml(interests[k], interests[NATIVE_KEY[k]], currency)}</td></tr>`).join('');
   return `<table>${rows}</table>`;
 }
 function depositRow(d, aid){
   return `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_eur)}</td><td><button class="link" onclick="delDep(${Number(d.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
 }
 function depositsPanel(info, a, cur){
-  return `<div style="flex:1;min-width:260px"><h3>Rendements nets</h3>${interestsTable(info.interests)}
+  return `<div style="flex:1;min-width:260px"><h3>Rendements nets</h3>${interestsTable(info.interests, a.currency)}
   <button onclick="recalcOne('${jsq(a.id)}')">Recalculer</button>
   <h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
   <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;

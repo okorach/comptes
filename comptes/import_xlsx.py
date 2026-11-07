@@ -141,7 +141,7 @@ def read_interests(wbv, con):
     for r in ws.iter_rows(min_row=2, max_row=200, max_col=7, values_only=True):
         if r[0] and isinstance(r[1], dt.datetime):
             v = [num(x) for x in r[2:7]]
-            con.execute("INSERT OR REPLACE INTO interests VALUES(?,?,?,?,?,?,?)",
+            con.execute("INSERT OR REPLACE INTO interests(account,calc_date,y1,y3,y5,y8,y_all) VALUES(?,?,?,?,?,?,?)",
                         (r[0], r[1].isoformat(), *v))
 
 

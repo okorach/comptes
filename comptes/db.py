@@ -27,13 +27,26 @@ CREATE TABLE IF NOT EXISTS deposits(
 );
 CREATE INDEX IF NOT EXISTS ix_dep_acc ON deposits(account, date);
 CREATE TABLE IF NOT EXISTS interests(
-  account TEXT PRIMARY KEY, calc_date TEXT, y1 REAL, y3 REAL, y5 REAL, y8 REAL, y_all REAL
+  account TEXT PRIMARY KEY, calc_date TEXT, y1 REAL, y3 REAL, y5 REAL, y8 REAL, y_all REAL,
+  n1 REAL, n3 REAL, n5 REAL, n8 REAL, n_all REAL  -- same yields in the currency of the account (without the exchange rate effect)
 );
 """
+
+
+NATIVE_INTEREST_COLUMNS = ("n1", "n3", "n5", "n8", "n_all")
+
+
+def _migrate(con: sqlite3.Connection) -> None:
+    """Adds the columns introduced after the first version of the database"""
+    cols = {r[1] for r in con.execute("PRAGMA table_info(interests)")}
+    for c in NATIVE_INTEREST_COLUMNS:
+        if c not in cols:
+            con.execute(f"ALTER TABLE interests ADD COLUMN {c} REAL")
 
 
 def connect(path=None):
     con = sqlite3.connect(path or DEFAULT_DB)
     con.row_factory = sqlite3.Row
     con.executescript(SCHEMA)
+    _migrate(con)
     return con
