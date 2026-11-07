@@ -55,3 +55,17 @@ test('drawChart renders an svg for line and bar series', () => {
   assert.match(line, /#123456/);
   assert.match(bar, /<rect/);
 });
+
+test('drawChart adds a gradient shadow and a drop shadow under each line, with unique ids per chart', () => {
+  const series = [{name: 'a', color: '#123456', type: 'line', values: [1, 2, 3]}];
+  const a = ctx.drawChart(['x', 'y', 'z'], series), b = ctx.drawChart(['x', 'y', 'z'], series);
+  assert.match(a, /<linearGradient/);
+  assert.match(a, /<feDropShadow/);
+  assert.match(a, /fill="url\(#cg\d+\)"/);
+  assert.notEqual(a.match(/id="(cg\d+)"/)[1], b.match(/id="(cg\d+)"/)[1]);
+});
+
+test('drawChart leaves a gap in the shadow where values are missing', () => {
+  const out = ctx.drawChart(['a', 'b', 'c', 'd', 'e'], [{name: 's', color: '#000', type: 'line', values: [1, 2, null, 3, 4]}]);
+  assert.equal(out.match(/fill="url\(#cg\d+\)"/g).length, 2);
+});
