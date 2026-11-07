@@ -96,13 +96,13 @@ async function interests(msg = ''){
   const rows = await api('interests');
   const f = v => v == null ? '<span class="mut">–</span>' : `<span class="${v < 0 ? 'neg' : ''}">${pct(v)}</span>`;
   $('#main').innerHTML = `<h2>Rendements annualisés (nets d'impôt)</h2>
-  <div class="row"><button class="primary" onclick="recalc(false)">Recalculer (hors livrets à calcul annuel)</button><button onclick="recalc(true)">Tout recalculer</button><span class="ok">${msg}</span></div>
+  <div class="row"><button class="primary" onclick="recalc()">Recalculer</button><span class="ok">${msg}</span></div>
   <div class="mut" style="font-size:12px">Taux actuariel équivalent à l'ancien « Valeur cible » d'Excel : solde initial + versements capitalisés = solde final. Net = brut × (1 − fiscalité du compte).</div>
   <table><tr><th>Compte</th><th>Type</th><th>Calculé le</th><th class="n">1 an</th><th class="n">3 ans</th><th class="n">5 ans</th><th class="n">8 ans</th><th class="n">Depuis le début</th></tr>
   ${rows.map(r => `<tr class="click" onclick="location.hash='#/account/${enc(r.account)}'"><td>${esc(r.account)}</td><td>${esc(r.type)}</td><td>${(r.calc_date || '').replace('T', ' ').slice(0, 16)}</td><td class="n">${f(r.y1)}</td><td class="n">${f(r.y3)}</td><td class="n">${f(r.y5)}</td><td class="n">${f(r.y8)}</td><td class="n">${f(r.y_all)}</td></tr>`).join('')}</table>`;
 }
-async function recalc(force){
-  const r = await api('interests/recalc', 'POST', {force});
+async function recalc(){
+  const r = await api('interests/recalc', 'POST', {force: true});
   await interests(`${r.n} comptes recalculés`);
 }
 
