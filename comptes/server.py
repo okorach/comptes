@@ -81,7 +81,8 @@ class Handler(BaseHTTPRequestHandler):
             return rep
         if path == "interests":
             rows = con.execute(
-                "SELECT i.*, a.tax, a.type, a.status FROM interests i JOIN accounts a ON a.id=i.account ORDER BY a.status DESC, i.account").fetchall()
+                "SELECT i.*, a.tax, a.type, a.status, a.currency FROM interests i JOIN accounts a ON a.id=i.account "
+                "ORDER BY a.status DESC, i.account").fetchall()
             return [dict(r) for r in rows]
         if path == "interests/recalc" and m == "POST":
             d = self._body()
