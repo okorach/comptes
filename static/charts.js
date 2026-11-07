@@ -115,7 +115,39 @@ function chartRange(id, which, value){
   document.querySelector(`#chart-from-${id}`).value = c.from;
   document.querySelector(`#chart-to-${id}`).value = c.to;
   document.querySelector(`#chart-plot-${id}`).innerHTML = chartSvg(id);
+  chartLeave(id);
   document.querySelector(`#chart-win-${id}`).textContent = chartWindowText(c);
+}
+
+/* Hover: a guide line, a dot on each line and a tooltip with the values of the data point below the mouse */
+function chartPointAt(c, svgX){
+  const n = c.to - c.from + 1, plotW = CHART_W - CHART_L - CHART_R;
+  if (n === 1) return c.from;
+  return Math.max(c.from, Math.min(c.to, c.from + Math.round((svgX - CHART_L) / plotW * (n - 1))));
+}
+
+function chartTip(c, sc, i, k, width){
+  const x = sc.x(i) * k, fmt = v => Math.round(v).toLocaleString('fr-FR');
+  const pts = c.series.filter(s => s.values[i] != null);
+  const dots = pts.filter(s => s.type !== 'bar')
+    .map(s => `<div class="chart-dot" style="left:${x}px;top:${sc.y(s.values[i]) * k}px;background:${s.color}"></div>`).join('');
+  const rows = pts.map(s => `<div><span style="color:${s.color}">■</span> ${s.name ? esc(s.name) + ' : ' : ''}<b>${fmt(s.values[i])}</b></div>`).join('');
+  const side = x > width / 2 ? `right:${width - x + 10}px` : `left:${x + 10}px`;
+  const guide = `<div class="chart-guide" style="left:${x}px;top:${CHART_T * k}px;height:${(c.height - CHART_T - CHART_B) * k}px"></div>`;
+  return `${guide}${dots}<div class="chart-tip" style="${side}"><div class="mut">${esc(c.labels[i])}</div>${rows}</div>`;
+}
+
+function chartHover(id, ev){
+  const c = charts.get(id), sc = c && chartScale(c);
+  if (!sc) return;
+  const box = ev.currentTarget.getBoundingClientRect(), k = box.width / CHART_W;
+  const svgX = (ev.clientX - box.left) / k;
+  const inside = svgX >= CHART_L - 10 && svgX <= CHART_W - CHART_R + 10;
+  document.querySelector(`#chart-hover-${id}`).innerHTML = inside ? chartTip(c, sc, chartPointAt(c, svgX), k, box.width) : '';
+}
+
+function chartLeave(id){
+  document.querySelector(`#chart-hover-${id}`).innerHTML = '';
 }
 
 /* series: [{name, color, type:'line'|'bar', values:[...]}], labels: x labels */
@@ -127,7 +159,9 @@ function drawChart(labels, series, opt = {}){
   charts.delete(id - 50);  // the page only shows a few charts at a time: keep the registry bounded
   const leg = series.filter(s => s.name).map(s => `<span style="margin-right:12px"><span style="color:${s.color}">■</span> ${s.name}</span>`).join('');
   const win = n < 3 ? '' : `<span class="chart-window" id="chart-win-${id}">${chartWindowText(c)}</span>`;
-  return `<div id="chart-${id}"><div id="chart-plot-${id}">${chartSvg(id)}</div>${chartControls(id, n)}` +
+  const wrap = `<div class="chart-wrap" onmousemove="chartHover(${id},event)" onmouseleave="chartLeave(${id})">` +
+    `<div id="chart-plot-${id}">${chartSvg(id)}</div><div class="chart-hover" id="chart-hover-${id}"></div></div>`;
+  return `<div id="chart-${id}">${wrap}${chartControls(id, n)}` +
     `<div class="mut chart-legend"><span>${leg}</span>${win}</div></div>`;
 }
 if (typeof module !== 'undefined') module.exports = {niceTicks, niceStep, fmtTick};

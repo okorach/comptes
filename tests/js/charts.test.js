@@ -105,3 +105,38 @@ test('chartRange keeps at least two points in the window', () => {
   assert.equal(els[`#chart-to-${id}`].value, 3);
   assert.equal(els[`#chart-win-${id}`].textContent, 'c → d');
 });
+
+function hoverEvent(clientX){
+  return {clientX, currentTarget: {getBoundingClientRect: () => ({left: 0, width: 1000})}};
+}
+
+test('chartHover shows the value of the data point below the mouse', () => {
+  const {ctx: c, els} = load();
+  const html = c.drawChart(['a', 'b', 'c', 'd', 'e'], [{name: 'Patrimoine', color: '#123456', type: 'line', values: [10, 20, 30, 40, 50]}]);
+  const id = Number(html.match(/id="chart-(\d+)"/)[1]);
+  assert.match(html, /onmousemove="chartHover\(\d+,event\)"/);
+  // x = 56 + 932 / 2 = 522 is the middle point (index 2)
+  c.chartHover(id, hoverEvent(522));
+  const tip = els[`#chart-hover-${id}`].innerHTML;
+  assert.match(tip, /class="chart-tip"/);
+  assert.match(tip, /<div class="mut">c<\/div>/);
+  assert.match(tip, /Patrimoine : <b>30<\/b>/);
+  assert.match(tip, /class="chart-dot"/);
+  c.chartHover(id, hoverEvent(5000));
+  assert.equal(els[`#chart-hover-${id}`].innerHTML, '');
+  c.chartHover(id, hoverEvent(522));
+  c.chartLeave(id);
+  assert.equal(els[`#chart-hover-${id}`].innerHTML, '');
+});
+
+test('chartHover follows the time window and escapes labels', () => {
+  const {ctx: c, els} = load();
+  const html = c.drawChart(['<i>a</i>', 'b', 'c', 'd'], [{name: 's', color: '#000', type: 'bar', values: [1, 2, 3, 4]}]);
+  const id = Number(html.match(/id="chart-(\d+)"/)[1]);
+  c.chartHover(id, hoverEvent(56));
+  assert.match(els[`#chart-hover-${id}`].innerHTML, /&lt;i&gt;a&lt;\/i&gt;/);
+  assert.doesNotMatch(els[`#chart-hover-${id}`].innerHTML, /chart-dot/);
+  c.chartRange(id, 'from', 2);
+  c.chartHover(id, hoverEvent(56));
+  assert.match(els[`#chart-hover-${id}`].innerHTML, /<div class="mut">c<\/div>/);
+});

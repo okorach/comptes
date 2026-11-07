@@ -29,3 +29,9 @@ svg text{fill:currentColor}
 .chart-range input::-moz-range-thumb{pointer-events:auto;width:10px;height:10px;border-radius:50%;background:var(--acc);border:2px solid var(--bg);box-shadow:0 0 0 1px var(--acc);cursor:ew-resize}
 .chart-legend{font-size:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .chart-window{font-variant-numeric:tabular-nums}
+.chart-wrap{position:relative}
+.chart-hover{position:absolute;inset:0;pointer-events:none}
+.chart-guide{position:absolute;width:1px;background:currentColor;opacity:.3}
+.chart-dot{position:absolute;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;border:2px solid var(--bg)}
+.chart-tip{position:absolute;top:4px;padding:4px 8px;background:var(--card);border:1px solid var(--line);border-radius:6px;font-size:12px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.chart-tip b{font-variant-numeric:tabular-nums}
