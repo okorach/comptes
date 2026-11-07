@@ -20,3 +20,12 @@ button.link{border:0;background:none;color:var(--acc);padding:0 4px}
 .scroll{overflow-x:auto} .chips label{display:inline-flex;flex-direction:row;gap:4px;margin-right:10px;color:var(--fg)}
 .err{color:var(--neg);margin:6px 0} .ok{color:var(--pos)}
 svg text{fill:currentColor}
+.chart-range{position:relative;height:22px;margin-top:2px}
+.chart-range::before{content:"";position:absolute;left:0;right:0;top:50%;height:3px;margin-top:-1.5px;background:var(--line);border-radius:2px}
+.chart-range input{position:absolute;left:0;top:0;width:100%;height:22px;margin:0;padding:0;border:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none}
+.chart-range input::-webkit-slider-runnable-track{background:none}
+.chart-range input::-moz-range-track{background:none}
+.chart-range input::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:14px;height:14px;border-radius:50%;background:var(--acc);border:2px solid var(--bg);box-shadow:0 0 0 1px var(--acc);cursor:ew-resize}
+.chart-range input::-moz-range-thumb{pointer-events:auto;width:10px;height:10px;border-radius:50%;background:var(--acc);border:2px solid var(--bg);box-shadow:0 0 0 1px var(--acc);cursor:ew-resize}
+.chart-legend{font-size:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.chart-window{font-variant-numeric:tabular-nums}

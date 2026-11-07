@@ -61,11 +61,47 @@ test('drawChart adds a gradient shadow and a drop shadow under each line, with u
   const a = ctx.drawChart(['x', 'y', 'z'], series), b = ctx.drawChart(['x', 'y', 'z'], series);
   assert.match(a, /<linearGradient/);
   assert.match(a, /<feDropShadow/);
-  assert.match(a, /fill="url\(#cg\d+\)"/);
-  assert.notEqual(a.match(/id="(cg\d+)"/)[1], b.match(/id="(cg\d+)"/)[1]);
+  assert.match(a, /fill="url\(#cg\d+_\d+\)"/);
+  assert.notEqual(a.match(/id="(cg\d+_\d+)"/)[1], b.match(/id="(cg\d+_\d+)"/)[1]);
 });
 
 test('drawChart leaves a gap in the shadow where values are missing', () => {
   const out = ctx.drawChart(['a', 'b', 'c', 'd', 'e'], [{name: 's', color: '#000', type: 'line', values: [1, 2, null, 3, 4]}]);
-  assert.equal(out.match(/fill="url\(#cg\d+\)"/g).length, 2);
+  assert.equal(out.match(/fill="url\(#cg\d+_\d+\)"/g).length, 2);
+});
+
+const lineChart = n => ctx.drawChart(Array.from({length: n}, (_, i) => `L${i}`), [{name: 's', color: '#123456', type: 'line', values: Array.from({length: n}, (_, i) => i * 10)}]);
+
+test('drawChart adds two time window sliders under the axis when there are enough points', () => {
+  const html = lineChart(10);
+  assert.equal(html.match(/type="range"/g).length, 2);
+  assert.match(html, /aria-label="Début"/);
+  assert.match(html, /aria-label="Fin"/);
+  assert.match(html, /L0 → L9/);
+  assert.doesNotMatch(ctx.drawChart(['a', 'b'], [{name: 's', color: '#000', type: 'line', values: [1, 2]}]), /type="range"/);
+});
+
+test('chartRange narrows the chart to the selected window and rescales the axis', () => {
+  const {ctx: c, els} = load();
+  const html = c.drawChart(['a', 'b', 'c', 'd', 'e', 'f'], [{name: 's', color: '#123456', type: 'line', values: [0, 10, 20, 30, 40, 1000]}]);
+  const id = Number(html.match(/id="chart-(\d+)"/)[1]);
+  c.chartRange(id, 'from', 1);
+  c.chartRange(id, 'to', 3);
+  const svg = els[`#chart-plot-${id}`].innerHTML;
+  assert.match(svg, /<svg/);
+  assert.doesNotMatch(svg, />f</);
+  assert.doesNotMatch(svg, /1 k/);
+  assert.equal(els[`#chart-win-${id}`].textContent, 'b → d');
+  assert.equal(els[`#chart-from-${id}`].value, 1);
+  assert.equal(els[`#chart-to-${id}`].value, 3);
+});
+
+test('chartRange keeps at least two points in the window', () => {
+  const {ctx: c, els} = load();
+  const id = Number(c.drawChart(['a', 'b', 'c', 'd'], [{name: 's', color: '#000', type: 'bar', values: [1, 2, 3, 4]}]).match(/id="chart-(\d+)"/)[1]);
+  c.chartRange(id, 'from', 3);
+  assert.equal(els[`#chart-from-${id}`].value, 2);
+  c.chartRange(id, 'to', 0);
+  assert.equal(els[`#chart-to-${id}`].value, 3);
+  assert.equal(els[`#chart-win-${id}`].textContent, 'c → d');
 });

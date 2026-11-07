@@ -17,47 +17,117 @@ function fmtTick(v, step){
   if (a >= 1e3) return (v / 1e3).toLocaleString('fr-FR', {maximumFractionDigits: step >= 1e3 ? 0 : 1}) + ' k';
   return v.toLocaleString('fr-FR', {maximumFractionDigits: 0});
 }
-/* series: [{name, color, type:'line'|'bar', values:[...]}], labels: x labels */
+const CHART_W = 1000, CHART_L = 56, CHART_R = 12, CHART_T = 10, CHART_B = 28;
+const charts = new Map();  // id -> {labels, series, from, to, height, opt}: state of each chart, used by the time window sliders
 let chartSeq = 0;
-function drawChart(labels, series, opt = {}){
-  const W = 1000, H = opt.height || 280, L = 56, R = 12, T = 10, B = 28, n = labels.length;
-  const all = series.flatMap(s => s.values.filter(v => v != null));
-  if (!n || !all.length) return '<div class="mut">Aucune donnée</div>';
-  let mn = Math.min(...all), mx = Math.max(...all);
+
+function chartScale(c){
+  const {series, from, to, height} = c;
+  const vals = series.flatMap(s => s.values.slice(from, to + 1).filter(v => v != null));
+  if (!vals.length) return null;
+  let mn = Math.min(...vals), mx = Math.max(...vals);
   if (series.some(s => s.type === 'bar')) { mn = Math.min(mn, 0); mx = Math.max(mx, 0); }
-  const nt = niceTicks(mn, mx, opt.ticks || 5);
-  const y = v => T + (nt.hi - v) * (H - T - B) / (nt.hi - nt.lo);
-  const x = i => L + (n === 1 ? (W - L - R) / 2 : i * (W - L - R) / (n - 1));
-  const bw = Math.max(1, (W - L - R) / n * 0.7);
-  let g = '', defs = '';
-  for (const v of nt.ticks){
-    g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="currentColor" opacity="${v === 0 ? .35 : .12}"/>`;
-    g += `<text x="${L - 6}" y="${y(v) + 4}" font-size="11" text-anchor="end" opacity=".7">${fmtTick(v, nt.step)}</text>`;
+  const nt = niceTicks(mn, mx, c.opt.ticks || 5), n = to - from + 1, plotW = CHART_W - CHART_L - CHART_R;
+  return {
+    nt,
+    y: v => CHART_T + (nt.hi - v) * (height - CHART_T - CHART_B) / (nt.hi - nt.lo),
+    x: i => CHART_L + (n === 1 ? plotW / 2 : (i - from) * plotW / (n - 1)),
+    bw: Math.max(1, plotW / n * 0.7),
+  };
+}
+
+function chartAxes(c, sc){
+  let g = '';
+  for (const v of sc.nt.ticks){
+    g += `<line x1="${CHART_L}" x2="${CHART_W - CHART_R}" y1="${sc.y(v)}" y2="${sc.y(v)}" stroke="currentColor" opacity="${v === 0 ? .35 : .12}"/>`;
+    g += `<text x="${CHART_L - 6}" y="${sc.y(v) + 4}" font-size="11" text-anchor="end" opacity=".7">${fmtTick(v, sc.nt.step)}</text>`;
   }
-  const every = Math.ceil(n / (opt.xticks || 10));
-  labels.forEach((l, i) => { if (i % every === 0 || i === n - 1)
-    g += `<text x="${x(i)}" y="${H - 8}" font-size="11" text-anchor="middle" opacity=".7">${l}</text>`; });
-  for (const s of series){
-    if (s.type === 'bar'){
-      s.values.forEach((v, i) => { if (v == null) return;
-        const y0 = y(0), y1 = y(v);
-        g += `<rect x="${x(i) - bw / 2}" y="${Math.min(y0, y1)}" width="${bw}" height="${Math.abs(y1 - y0)}" fill="${s.color}" opacity=".75"><title>${labels[i]} : ${Math.round(v).toLocaleString('fr-FR')}</title></rect>`; });
-    } else {
-      // Contiguous runs of points: each one gets a gradient area under the line (the "shadow") and a soft drop shadow on the line
-      const runs = [];
-      s.values.forEach((v, i) => { if (v == null) { runs.push([]); } else { if (!runs.length) runs.push([]); runs[runs.length - 1].push([x(i), y(v)]); } });
-      const gid = `cg${++chartSeq}`, base = y(nt.lo);
-      defs += `<linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s.color}" stop-opacity=".35"/>` +
-        `<stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient>` +
-        `<filter id="${gid}s" filterUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="${s.color}" flood-opacity=".45"/></filter>`;
-      for (const r of runs.filter(r => r.length)){
-        const d = r.map(([px, py], k) => (k ? 'L' : 'M') + px.toFixed(1) + ',' + py.toFixed(1)).join('');
-        if (r.length > 1) g += `<path d="${d}L${r[r.length - 1][0].toFixed(1)},${base.toFixed(1)}L${r[0][0].toFixed(1)},${base.toFixed(1)}Z" fill="url(#${gid})" stroke="none"/>`;
-        g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" filter="url(#${gid}s)"/>`;
-      }
-    }
+  const every = Math.ceil((c.to - c.from + 1) / (c.opt.xticks || 10));
+  for (let i = c.from; i <= c.to; i++){
+    if (i === c.to || ((i - c.from) % every === 0 && c.to - i >= every / 2))  // the last label is always shown: skip a regular one too close to it
+      g += `<text x="${sc.x(i)}" y="${c.height - 8}" font-size="11" text-anchor="middle" opacity=".7">${c.labels[i]}</text>`;
   }
+  return g;
+}
+
+function chartBars(c, sc, s){
+  let g = '';
+  for (let i = c.from; i <= c.to; i++){
+    const v = s.values[i];
+    if (v == null) continue;
+    const y0 = sc.y(0), y1 = sc.y(v), tip = `${c.labels[i]} : ${Math.round(v).toLocaleString('fr-FR')}`;
+    g += `<rect x="${sc.x(i) - sc.bw / 2}" y="${Math.min(y0, y1)}" width="${sc.bw}" height="${Math.abs(y1 - y0)}" fill="${s.color}" opacity=".75"><title>${tip}</title></rect>`;
+  }
+  return g;
+}
+
+/* Contiguous runs of points: each one gets a gradient area under the line (the "shadow") and a soft drop shadow on the line */
+function chartLine(c, sc, s, gid){
+  const runs = [[]];
+  for (let i = c.from; i <= c.to; i++){
+    if (s.values[i] == null) runs.push([]);
+    else runs.at(-1).push([sc.x(i), sc.y(s.values[i])]);
+  }
+  const base = sc.y(sc.nt.lo), pt = (px, py) => `${px.toFixed(1)},${py.toFixed(1)}`;
+  const defs = `<linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s.color}" stop-opacity=".35"/>` +
+    `<stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient>` +
+    `<filter id="${gid}s" filterUnits="userSpaceOnUse" x="0" y="0" width="${CHART_W}" height="${c.height}">` +
+    `<feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="${s.color}" flood-opacity=".45"/></filter>`;
+  let g = '';
+  for (const r of runs.filter(r => r.length)){
+    const d = r.map(([px, py], k) => (k ? 'L' : 'M') + pt(px, py)).join('');
+    if (r.length > 1) g += `<path d="${d}L${pt(r.at(-1)[0], base)}L${pt(r[0][0], base)}Z" fill="url(#${gid})" stroke="none"/>`;
+    g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" filter="url(#${gid}s)"/>`;
+  }
+  return {defs, g};
+}
+
+function chartSvg(id){
+  const c = charts.get(id), sc = chartScale(c);
+  if (!sc) return '<div class="mut">Aucune donnée</div>';
+  let g = chartAxes(c, sc), defs = '';
+  c.series.forEach((s, k) => {
+    if (s.type === 'bar') { g += chartBars(c, sc, s); return; }
+    const line = chartLine(c, sc, s, `cg${id}_${k}`);
+    defs += line.defs;
+    g += line.g;
+  });
+  return `<svg viewBox="0 0 ${CHART_W} ${c.height}" width="100%" role="img"><defs>${defs}</defs>${g}</svg>`;
+}
+
+const chartWindowText = c => `${c.labels[c.from]} → ${c.labels[c.to]}`;
+
+/* Two sliders under the horizontal axis (left = start, right = end) narrowing the chart to a time window */
+function chartControls(id, n){
+  if (n < 3) return '';
+  const slider = (which, label, value) =>
+    `<input type="range" id="chart-${which}-${id}" min="0" max="${n - 1}" step="1" value="${value}" aria-label="${label}" oninput="chartRange(${id},'${which}',this.value)">`;
+  const pct = v => (v / CHART_W * 100).toFixed(2);
+  return `<div class="chart-range" style="margin:0 ${pct(CHART_R)}% 0 ${pct(CHART_L)}%">${slider('from', 'Début', 0)}${slider('to', 'Fin', n - 1)}</div>`;
+}
+
+function chartRange(id, which, value){
+  const c = charts.get(id);
+  if (!c) return;
+  const v = Number(value);
+  if (which === 'from') c.from = Math.max(0, Math.min(v, c.to - 1));
+  else c.to = Math.min(c.labels.length - 1, Math.max(v, c.from + 1));
+  document.querySelector(`#chart-from-${id}`).value = c.from;
+  document.querySelector(`#chart-to-${id}`).value = c.to;
+  document.querySelector(`#chart-plot-${id}`).innerHTML = chartSvg(id);
+  document.querySelector(`#chart-win-${id}`).textContent = chartWindowText(c);
+}
+
+/* series: [{name, color, type:'line'|'bar', values:[...]}], labels: x labels */
+function drawChart(labels, series, opt = {}){
+  const n = labels.length;
+  if (!n || !series.some(s => s.values.some(v => v != null))) return '<div class="mut">Aucune donnée</div>';
+  const id = ++chartSeq, c = {labels, series, from: 0, to: n - 1, height: opt.height || 280, opt};
+  charts.set(id, c);
+  charts.delete(id - 50);  // the page only shows a few charts at a time: keep the registry bounded
   const leg = series.filter(s => s.name).map(s => `<span style="margin-right:12px"><span style="color:${s.color}">■</span> ${s.name}</span>`).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img"><defs>${defs}</defs>${g}</svg><div class="mut" style="font-size:12px">${leg}</div>`;
+  const win = n < 3 ? '' : `<span class="chart-window" id="chart-win-${id}">${chartWindowText(c)}</span>`;
+  return `<div id="chart-${id}"><div id="chart-plot-${id}">${chartSvg(id)}</div>${chartControls(id, n)}` +
+    `<div class="mut chart-legend"><span>${leg}</span>${win}</div></div>`;
 }
 if (typeof module !== 'undefined') module.exports = {niceTicks, niceStep, fmtTick};

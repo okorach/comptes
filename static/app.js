@@ -14,7 +14,7 @@ let META = null;
 const meta = async () => META || (META = await api('meta'));
 const enc = encodeURIComponent;
 // Escapes a value for use as a single-quoted JS string inside a double-quoted HTML attribute (onclick="f('...')")
-const jsq = s => esc(String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r'));
+const jsq = s => esc(String(s).replaceAll('\\', String.raw`\\`).replaceAll("'", String.raw`\'`).replaceAll('\n', String.raw`\n`).replaceAll('\r', String.raw`\r`));
 
 /* ------------------------------------------------------------------ router */
 async function route(){
@@ -96,6 +96,18 @@ async function recalc(force){
 }
 
 /* ------------------------------------------------------------------ account */
+function txRow(t, foreign, aid){
+  const native = foreign ? `<td class="n mut">${num(t.native_amount, '')}</td><td class="n mut">${num(t.native_balance, '')}</td>` : '';
+  const budget = t.in_budget ? ` <span class="mut">(${esc(t.in_budget)})</span>` : '';
+  return `<tr><td>${esc(t.date)}</td><td class="n ${cls(t.amount_eur)}">${num(t.amount_eur)}</td><td class="n">${num(t.balance_eur)}</td>${native}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
+  <td><button class="link" onclick="editTx(${esc(JSON.stringify(t))})">modifier</button><button class="link" onclick="delTx(${Number(t.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
+}
+const INTEREST_PERIODS = [['1 an', 'y1'], ['3 ans', 'y3'], ['5 ans', 'y5'], ['8 ans', 'y8'], ['Depuis le début', 'y_all']];
+function interestsTable(interests){
+  if (!interests) return '<div class="mut">Pas encore calculé</div>';
+  const rows = INTEREST_PERIODS.map(([l, k]) => `<tr><td>${l}</td><td class="n">${pct(interests[k])}</td></tr>`).join('');
+  return `<table>${rows}</table>`;
+}
 let EDIT = null;
 async function account(id, msg = ''){
   const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions?limit=500'), meta()]);
@@ -106,6 +118,7 @@ async function account(id, msg = ''){
   const modeFields = a.mode === 'snapshot' ? `<label>Solde (${cur})<input id="f_bal" size="12"></label>`
     : a.mode === 'shares' ? `<label>Nb de titres<input id="f_qty" size="10"></label><label>Prix unitaire<input id="f_px" size="10"></label>`
     : `<label>Montant (${cur})<input id="f_amt" size="12"></label>`;
+  const foreignHead = foreign ? `<th class="n">Montant ${cur}</th><th class="n">Solde ${cur}</th>` : '';
   const importBanks = ['BoursoBank', 'ING', 'LCL', 'UBS', 'Revolut', 'Yuh', 'generic'];
   $('#main').innerHTML = `<h2>${esc(a.id)} <span class="mut" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
   <div class="row"><button onclick="location.hash='#/'">← Retour</button>
@@ -117,10 +130,9 @@ async function account(id, msg = ''){
   <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
-  <div class="row" style="align-items:start"><div style="flex:3;min-width:520px"><div class="scroll"><table><tr><th>Date</th><th class="n">Montant €</th><th class="n">Solde €</th>${foreign ? `<th class="n">Montant ${cur}</th><th class="n">Solde ${cur}</th>` : ''}<th>Description</th><th>Sous-cat.</th><th></th></tr>
-  ${tr.map(t => `<tr><td>${esc(t.date)}</td><td class="n ${cls(t.amount_eur)}">${num(t.amount_eur)}</td><td class="n">${num(t.balance_eur)}</td>${foreign ? `<td class="n mut">${num(t.native_amount, '')}</td><td class="n mut">${num(t.native_balance, '')}</td>` : ''}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${t.in_budget ? ` <span class="mut">(${esc(t.in_budget)})</span>` : ''}</td>
-  <td><button class="link" onclick="editTx(${esc(JSON.stringify(t))})">modifier</button><button class="link" onclick="delTx(${Number(t.id)},'${jsq(a.id)}')">suppr.</button></td></tr>`).join('')}</table></div><div class="mut">${tr.length} dernières écritures</div></div>
-  ${hasDep ? `<div style="flex:1;min-width:260px"><h3>Rendements nets</h3>${info.interests ? `<table>${[['1 an', 'y1'], ['3 ans', 'y3'], ['5 ans', 'y5'], ['8 ans', 'y8'], ['Depuis le début', 'y_all']].map(([l, k]) => `<tr><td>${l}</td><td class="n">${pct(info.interests[k])}</td></tr>`).join('')}</table>` : '<div class="mut">Pas encore calculé</div>'}
+  <div class="row" style="align-items:start"><div style="flex:3;min-width:520px"><div class="scroll"><table><tr><th>Date</th><th class="n">Montant €</th><th class="n">Solde €</th>${foreignHead}<th>Description</th><th>Sous-cat.</th><th></th></tr>
+  ${tr.map(t => txRow(t, foreign, a.id)).join('')}</table></div><div class="mut">${tr.length} dernières écritures</div></div>
+  ${hasDep ? `<div style="flex:1;min-width:260px"><h3>Rendements nets</h3>${interestsTable(info.interests)}
   <button onclick="recalcOne('${jsq(a.id)}')">Recalculer</button>
   <h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
   <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_eur)}</td><td><button class="link" onclick="delDep(${Number(d.id)},'${jsq(a.id)}')">suppr.</button></td></tr>`).join('')}</table></div></div>` : ''}</div>`;
