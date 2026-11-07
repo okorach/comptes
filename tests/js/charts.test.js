@@ -153,3 +153,27 @@ test('chart values carry the currency symbol, configurable with opt.unit', () =>
   assert.match(plain(mk({unit: 'CHF'})), /<b>123 456 CHF<\/b>/);
   assert.match(plain(c.drawChart(['a'], [{color: '#000', type: 'bar', values: [2500]}])), /<title>a : 2 500 €<\/title>/);
 });
+
+test('a series on the right axis gets its own scale, labels and unit', () => {
+  const {ctx: c, els} = load();
+  const bars = {name: 'Épargne', color: '#0a0', type: 'bar', axis: 'right', unit: '€/mois', values: [null, 1200, 1500, 900]};
+  const line = {name: 'Patrimoine', color: '#00f', type: 'line', values: [1000000, 1100000, 1250000, 1300000]};
+  const html = c.drawChart(['a', 'b', 'c', 'd'], [bars, line]);
+  assert.match(html, /text-anchor="start"/);
+  assert.doesNotMatch(c.drawChart(['a', 'b', 'c', 'd'], [line]), /text-anchor="start"/);
+  // right-axis labels use the scale of the bars (hundreds), not the one of the line (millions)
+  const startLabels = [...html.matchAll(/text-anchor="start"[^>]*>([^<]*)</g)].map(m => plain(m[1]));
+  assert.ok(startLabels.length >= 2 && startLabels.every(l => !l.includes('M')));
+  const id = Number(html.match(/id="chart-(\d+)"/)[1]);
+  c.chartHover(id, hoverEvent(500));
+  const tip = plain(els[`#chart-hover-${id}`].innerHTML);
+  assert.match(tip, /Épargne: <b>\d[\d ]* €\/mois<\/b>/);
+  assert.match(tip, /Patrimoine: <b>[\d ]+ €<\/b>/);
+});
+
+test('with a right axis the sliders and the hover use the wider right margin', () => {
+  const {ctx: c} = load();
+  const series = [{color: '#0a0', type: 'bar', axis: 'right', values: [1, 2, 3]}, {color: '#00f', type: 'line', values: [1, 2, 3]}];
+  assert.match(c.drawChart(['a', 'b', 'c'], series), /margin:0 5\.60% 0 5\.60%/);
+  assert.match(lineChart(3), /margin:0 1\.20% 0 5\.60%/);
+});

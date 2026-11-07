@@ -99,3 +99,15 @@ test('account page escapes untrusted values in text and in inline handlers', asy
   const decoded = edit.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
   assert.equal(JSON.parse(decoded).description, evil);
 });
+
+test('monthlySavings is the average monthly growth over the previous 12 months, rounded to 100', () => {
+  const {ctx} = load();
+  const totals = Array.from({length: 15}, (_, i) => 1000000 + i * 1234);
+  const s = ctx.monthlySavings(totals);
+  assert.equal(s.length, 15);
+  assert.ok(s.slice(0, 12).every(v => v === null));
+  assert.equal(s[12], 1200);  // (12 * 1234) / 12 = 1234 -> 1200
+  assert.equal(ctx.monthlySavings([100, null, 300], 1)[1], null);
+  assert.equal(ctx.monthlySavings([100, null, 300], 1)[2], null);
+  assert.equal(ctx.monthlySavings([0, 1234, 1234, 4000], 1)[1], 1200);
+});

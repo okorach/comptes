@@ -31,6 +31,15 @@ async function route(){
 }
 window.addEventListener('hashchange', route);
 
+/* Average monthly growth of the net worth over the previous `months` months, rounded to the hundred (column "Epargne Mensuelle" of the "Solde" tab of Comptes.xlsm) */
+const SAVINGS_MONTHS = 12;
+function monthlySavings(totals, months = SAVINGS_MONTHS){
+  return totals.map((v, i) => {
+    const before = totals[i - months];
+    return v == null || before == null ? null : Math.round((v - before) / months / 100) * 100;
+  });
+}
+
 /* ------------------------------------------------------------------ home */
 async function home(){
   const open = $('#openOnly') ? $('#openOnly').checked : true;
@@ -42,7 +51,9 @@ async function home(){
   const byYear = {}; shown.forEach(a => { const k = a.availability || 0; byYear[k] = (byYear[k] || 0) + a.balance_eur; });
   $('#main').innerHTML = `<div class="mut">Patrimoine</div><div class="big">${num(total)}</div>
   <label><input type="checkbox" id="openOnly" ${open ? 'checked' : ''} onchange="home()"> comptes ouverts seulement</label>
-  ${drawChart(nw.map(p => p.month), [{name: 'Patrimoine', color: 'var(--acc)', type: 'line', values: nw.map(p => p.total)}], {xticks: 12})}
+  ${drawChart(nw.map(p => p.month), [
+    {name: `Épargne mensuelle (moy. ${SAVINGS_MONTHS} mois)`, color: 'var(--pos)', type: 'bar', axis: 'right', unit: '€/mois', values: monthlySavings(nw.map(p => p.total))},
+    {name: 'Patrimoine', color: 'var(--acc)', type: 'line', values: nw.map(p => p.total)}], {xticks: 12})}
   <div class="row" style="align-items:start"><div style="flex:1;min-width:260px"><h3>Par banque</h3>${tbl(sumBy(a => a.bank))}</div>
   <div style="flex:1;min-width:260px"><h3>Par année de disponibilité</h3>${tbl(Object.entries(byYear).sort((a, b) => a[0] - b[0]).map(([k, v]) => [k === '0' ? 'Immédiate' : k, v]))}</div>
   <div style="flex:1;min-width:260px"><h3>Par type</h3>${tbl(sumBy(a => a.type))}</div></div>
