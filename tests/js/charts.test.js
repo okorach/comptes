@@ -120,7 +120,7 @@ test('chartHover shows the value of the data point below the mouse', () => {
   const tip = els[`#chart-hover-${id}`].innerHTML;
   assert.match(tip, /class="chart-tip"/);
   assert.match(tip, /<div class="mut">c<\/div>/);
-  assert.match(tip, /Patrimoine : <b>30<\/b>/);
+  assert.match(tip, /Patrimoine: <b>30 €<\/b>/);
   assert.match(tip, /class="chart-dot"/);
   c.chartHover(id, hoverEvent(5000));
   assert.equal(els[`#chart-hover-${id}`].innerHTML, '');
@@ -139,4 +139,17 @@ test('chartHover follows the time window and escapes labels', () => {
   c.chartRange(id, 'from', 2);
   c.chartHover(id, hoverEvent(56));
   assert.match(els[`#chart-hover-${id}`].innerHTML, /<div class="mut">c<\/div>/);
+});
+
+test('chart values carry the currency symbol, configurable with opt.unit', () => {
+  const {ctx: c, els} = load();
+  const mk = opt => {
+    const html = c.drawChart(['a', 'b', 'c'], [{name: 'Patrimoine', color: '#000', type: 'line', values: [1000, 123456, 3]}], opt);
+    const id = Number(html.match(/id="chart-(\d+)"/)[1]);
+    c.chartHover(id, hoverEvent(522));
+    return els[`#chart-hover-${id}`].innerHTML;
+  };
+  assert.match(plain(mk({})), /Patrimoine: <b>123 456 €<\/b>/);
+  assert.match(plain(mk({unit: 'CHF'})), /<b>123 456 CHF<\/b>/);
+  assert.match(plain(c.drawChart(['a'], [{color: '#000', type: 'bar', values: [2500]}])), /<title>a : 2 500 €<\/title>/);
 });

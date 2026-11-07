@@ -55,7 +55,7 @@ function chartBars(c, sc, s){
   for (let i = c.from; i <= c.to; i++){
     const v = s.values[i];
     if (v == null) continue;
-    const y0 = sc.y(0), y1 = sc.y(v), tip = `${c.labels[i]} : ${Math.round(v).toLocaleString('fr-FR')}`;
+    const y0 = sc.y(0), y1 = sc.y(v), tip = `${c.labels[i]} : ${chartValue(c, v)}`;
     g += `<rect x="${sc.x(i) - sc.bw / 2}" y="${Math.min(y0, y1)}" width="${sc.bw}" height="${Math.abs(y1 - y0)}" fill="${s.color}" opacity=".75"><title>${tip}</title></rect>`;
   }
   return g;
@@ -119,6 +119,9 @@ function chartRange(id, which, value){
   document.querySelector(`#chart-win-${id}`).textContent = chartWindowText(c);
 }
 
+/* Value with the unit of the chart (opt.unit, € by default) */
+const chartValue = (c, v) => `${Math.round(v).toLocaleString('fr-FR')} ${c.opt.unit ?? '€'}`;
+
 /* Hover: a guide line, a dot on each line and a tooltip with the values of the data point below the mouse */
 function chartPointAt(c, svgX){
   const n = c.to - c.from + 1, plotW = CHART_W - CHART_L - CHART_R;
@@ -127,11 +130,11 @@ function chartPointAt(c, svgX){
 }
 
 function chartTip(c, sc, i, k, width){
-  const x = sc.x(i) * k, fmt = v => Math.round(v).toLocaleString('fr-FR');
+  const x = sc.x(i) * k, fmt = v => chartValue(c, v);
   const pts = c.series.filter(s => s.values[i] != null);
   const dots = pts.filter(s => s.type !== 'bar')
     .map(s => `<div class="chart-dot" style="left:${x}px;top:${sc.y(s.values[i]) * k}px;background:${s.color}"></div>`).join('');
-  const rows = pts.map(s => `<div><span style="color:${s.color}">■</span> ${s.name ? esc(s.name) + ' : ' : ''}<b>${fmt(s.values[i])}</b></div>`).join('');
+  const rows = pts.map(s => `<div><span style="color:${s.color}">■</span> ${s.name ? esc(s.name) + ': ' : ''}<b>${fmt(s.values[i])}</b></div>`).join('');
   const side = x > width / 2 ? `right:${width - x + 10}px` : `left:${x + 10}px`;
   const guide = `<div class="chart-guide" style="left:${x}px;top:${CHART_T * k}px;height:${(c.height - CHART_T - CHART_B) * k}px"></div>`;
   return `${guide}${dots}<div class="chart-tip" style="${side}"><div class="mut">${esc(c.labels[i])}</div>${rows}</div>`;
