@@ -16,6 +16,8 @@ test('jsq escapes quotes and backslashes for inline JS string literals', () => {
   const jsq = load().get('jsq');
   assert.equal(jsq("l'a"), "l\\'a");
   assert.equal(jsq('a\\b'), 'a\\\\b');
+  assert.equal(jsq('a"b<c&d'), 'a&quot;b&lt;c&amp;d');
+  assert.equal(jsq('a\nb'), 'a\\nb');
 });
 
 test('enc url-encodes account ids', () => {
@@ -80,4 +82,20 @@ test('route renders server errors as text, not HTML', async () => {
   assert.equal(err.className, 'err');
   assert.equal(err.textContent, 'Erreur : <img src=x onerror=alert(1)>');
   assert.equal(els['#main'].innerHTML, 'Chargement…');
+});
+
+test('account page escapes untrusted values in text and in inline handlers', async () => {
+  const evil = '"><img src=x onerror=alert(1)>&quot;+alert(2)+&quot;';
+  const tx = {id: 7, date: '<b>2024</b>', amount_eur: 1, balance_eur: 1, description: evil, subcategory: evil, in_budget: '<i>1</i>'};
+  const account = {account: {id: evil, type: 'Courant', bank: evil, currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []};
+  const meta = {categories: [{subcategory: evil}], currencies: ['EUR']};
+  const body = url => (url.includes('transactions') ? [tx] : url.endsWith('/meta') ? meta : account);
+  const {ctx, els} = load(async url => ({json: async () => body(url)}));
+  await ctx.account('x', '<u>msg</u>');
+  const html = els['#main'].innerHTML;
+  assert.doesNotMatch(html, /<img/);
+  assert.doesNotMatch(html, /<b>2024|<i>1<|<u>msg/);
+  const edit = html.match(/onclick="editTx\(([^"]*)\)"/)[1];
+  const decoded = edit.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  assert.equal(JSON.parse(decoded).description, evil);
 });

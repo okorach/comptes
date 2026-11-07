@@ -13,7 +13,8 @@ async function api(path, method = 'GET', body){
 let META = null;
 const meta = async () => META || (META = await api('meta'));
 const enc = encodeURIComponent;
-const jsq = s => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+// Escapes a value for use as a single-quoted JS string inside a double-quoted HTML attribute (onclick="f('...')")
+const jsq = s => esc(String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r'));
 
 /* ------------------------------------------------------------------ router */
 async function route(){
@@ -98,7 +99,7 @@ async function recalc(force){
 let EDIT = null;
 async function account(id, msg = ''){
   const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions?limit=500'), meta()]);
-  const a = info.account, cur = sym(a.currency), foreign = a.currency !== 'EUR';
+  const a = info.account, cur = esc(sym(a.currency)), foreign = a.currency !== 'EUR';
   const hasDep = !['Courant', 'Autres', null].includes(a.type);
   const bank = a.bank || '';
   const subOpts = '<option value=""></option>' + m.categories.map(c => `<option>${esc(c.subcategory)}</option>`).join('');
@@ -111,18 +112,18 @@ async function account(id, msg = ''){
   <button onclick="setStatus('${jsq(a.id)}','${a.status === 'Open' ? 'Closed' : 'Open'}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
   <a href="/api/account/${enc(a.id)}/export.csv"><button>Exporter CSV</button></a>
   ${a.mode === 'flow' || a.mode === 'static' ? `<label style="flex-direction:row;align-items:center;gap:6px">Importer <select id="imp_bank">${importBanks.map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('')}</select><input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : ''}</div>
-  <div id="imp"></div><div class="ok">${msg}</div>
+  <div id="imp"></div><div class="ok">${esc(msg)}</div>
   <div class="card"><b id="form_title">Nouvelle écriture</b><div class="row"><label>Date<input type="date" id="f_date" value="${new Date().toISOString().slice(0, 10)}"></label>${modeFields}
   <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
   <div class="row" style="align-items:start"><div style="flex:3;min-width:520px"><div class="scroll"><table><tr><th>Date</th><th class="n">Montant €</th><th class="n">Solde €</th>${foreign ? `<th class="n">Montant ${cur}</th><th class="n">Solde ${cur}</th>` : ''}<th>Description</th><th>Sous-cat.</th><th></th></tr>
-  ${tr.map(t => `<tr><td>${t.date}</td><td class="n ${cls(t.amount_eur)}">${num(t.amount_eur)}</td><td class="n">${num(t.balance_eur)}</td>${foreign ? `<td class="n mut">${num(t.native_amount, '')}</td><td class="n mut">${num(t.native_balance, '')}</td>` : ''}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${t.in_budget ? ` <span class="mut">(${t.in_budget})</span>` : ''}</td>
-  <td><button class="link" onclick='editTx(${JSON.stringify(t).replace(/'/g, "&#39;")})'>modifier</button><button class="link" onclick="delTx(${t.id},'${jsq(a.id)}')">suppr.</button></td></tr>`).join('')}</table></div><div class="mut">${tr.length} dernières écritures</div></div>
+  ${tr.map(t => `<tr><td>${esc(t.date)}</td><td class="n ${cls(t.amount_eur)}">${num(t.amount_eur)}</td><td class="n">${num(t.balance_eur)}</td>${foreign ? `<td class="n mut">${num(t.native_amount, '')}</td><td class="n mut">${num(t.native_balance, '')}</td>` : ''}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${t.in_budget ? ` <span class="mut">(${esc(t.in_budget)})</span>` : ''}</td>
+  <td><button class="link" onclick="editTx(${esc(JSON.stringify(t))})">modifier</button><button class="link" onclick="delTx(${Number(t.id)},'${jsq(a.id)}')">suppr.</button></td></tr>`).join('')}</table></div><div class="mut">${tr.length} dernières écritures</div></div>
   ${hasDep ? `<div style="flex:1;min-width:260px"><h3>Rendements nets</h3>${info.interests ? `<table>${[['1 an', 'y1'], ['3 ans', 'y3'], ['5 ans', 'y5'], ['8 ans', 'y8'], ['Depuis le début', 'y_all']].map(([l, k]) => `<tr><td>${l}</td><td class="n">${pct(info.interests[k])}</td></tr>`).join('')}</table>` : '<div class="mut">Pas encore calculé</div>'}
   <button onclick="recalcOne('${jsq(a.id)}')">Recalculer</button>
   <h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
-  <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => `<tr><td>${d.date}</td><td class="n">${num(d.amount_eur)}</td><td><button class="link" onclick="delDep(${d.id},'${jsq(a.id)}')">suppr.</button></td></tr>`).join('')}</table></div></div>` : ''}</div>`;
+  <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_eur)}</td><td><button class="link" onclick="delDep(${Number(d.id)},'${jsq(a.id)}')">suppr.</button></td></tr>`).join('')}</table></div></div>` : ''}</div>`;
   EDIT = null;
 }
 function resetForm(){ EDIT = null; $('#form_title').textContent = 'Nouvelle écriture'; ['f_amt', 'f_bal', 'f_qty', 'f_px', 'f_desc', 'f_bud'].forEach(i => { if ($('#' + i)) $('#' + i).value = ''; }); }
