@@ -108,6 +108,15 @@ function interestsTable(interests){
   const rows = INTEREST_PERIODS.map(([l, k]) => `<tr><td>${l}</td><td class="n">${pct(interests[k])}</td></tr>`).join('');
   return `<table>${rows}</table>`;
 }
+function depositRow(d, aid){
+  return `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_eur)}</td><td><button class="link" onclick="delDep(${Number(d.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
+}
+function depositsPanel(info, a, cur){
+  return `<div style="flex:1;min-width:260px"><h3>Rendements nets</h3>${interestsTable(info.interests)}
+  <button onclick="recalcOne('${jsq(a.id)}')">Recalculer</button>
+  <h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
+  <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;
+}
 let EDIT = null;
 async function account(id, msg = ''){
   const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions?limit=500'), meta()]);
@@ -132,10 +141,7 @@ async function account(id, msg = ''){
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
   <div class="row" style="align-items:start"><div style="flex:3;min-width:520px"><div class="scroll"><table><tr><th>Date</th><th class="n">Montant €</th><th class="n">Solde €</th>${foreignHead}<th>Description</th><th>Sous-cat.</th><th></th></tr>
   ${tr.map(t => txRow(t, foreign, a.id)).join('')}</table></div><div class="mut">${tr.length} dernières écritures</div></div>
-  ${hasDep ? `<div style="flex:1;min-width:260px"><h3>Rendements nets</h3>${interestsTable(info.interests)}
-  <button onclick="recalcOne('${jsq(a.id)}')">Recalculer</button>
-  <h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
-  <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_eur)}</td><td><button class="link" onclick="delDep(${Number(d.id)},'${jsq(a.id)}')">suppr.</button></td></tr>`).join('')}</table></div></div>` : ''}</div>`;
+  ${hasDep ? depositsPanel(info, a, cur) : ''}</div>`;
   EDIT = null;
 }
 function resetForm(){ EDIT = null; $('#form_title').textContent = 'Nouvelle écriture'; ['f_amt', 'f_bal', 'f_qty', 'f_px', 'f_desc', 'f_bud'].forEach(i => { if ($('#' + i)) $('#' + i).value = ''; }); }
