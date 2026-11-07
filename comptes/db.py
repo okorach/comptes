@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS interests(
 NATIVE_INTEREST_COLUMNS = ("n1", "n3", "n5", "n8", "n_all")
 
 
-def _migrate(con):
+def _migrate(con: sqlite3.Connection) -> None:
     """Adds the columns introduced after the first version of the database"""
     cols = {r[1] for r in con.execute("PRAGMA table_info(interests)")}
     for c in NATIVE_INTEREST_COLUMNS:

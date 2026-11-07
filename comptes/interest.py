@@ -7,6 +7,7 @@ n_i=floor((end-date_i [+period if withdrawal])/period); deposits outside (start,
 are ignored, and those with n_i<=0 are added at face value.
 """
 import datetime as dt
+import sqlite3
 from bisect import bisect_right
 
 EPS = 1e-12
@@ -69,7 +70,7 @@ def rate_for_period(balances, deposits, start, end, period):
     return (lo + hi) / 2
 
 
-def key_interests(con, account, now=None, native=False):
+def key_interests(con: sqlite3.Connection, account: str, now: dt.datetime | None = None, native: bool = False) -> tuple[dict, int]:
     """Return {'y1','y3','y5','y8','y_all'} gross rates (None where not applicable).
     With native=True the rates are computed on the amounts in the currency of the account (no exchange rate effect)."""
     # shares accounts have no stored native balance: it is quantity x price
@@ -104,7 +105,8 @@ def recalc(con, account, now=None):
     acc = con.execute("SELECT tax, currency FROM accounts WHERE id=?", (account,)).fetchone()
     tax = acc["tax"] or 0.0
 
-    def net(rates):
+    def net(rates: dict) -> dict:
+        """Rates net of the tax of the account"""
         return {k: (None if v is None else v * (1 - tax)) for k, v in rates.items()}  # stored NET, like the workbook
 
     rates = net(key_interests(con, account, now)[0])

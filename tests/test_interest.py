@@ -123,7 +123,7 @@ class NativeInterestTest(unittest.TestCase):
             con = connect(path)
             cols = {r[1] for r in con.execute("PRAGMA table_info(interests)")}
             con.close()
-            self.assertTrue({"n1", "n3", "n5", "n8", "n_all"} <= cols)
+            self.assertLessEqual({"n1", "n3", "n5", "n8", "n_all"}, cols)
         finally:
             os.remove(path)
 
