@@ -13,7 +13,8 @@ async function api(path, method = 'GET', body){
 let META = null;
 const meta = async () => META || (META = await api('meta'));
 const enc = encodeURIComponent;
-const jsq = s => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+// Escapes a value for use as a single-quoted JS string inside a double-quoted HTML attribute (onclick="f('...')")
+const jsq = s => esc(String(s).replaceAll('\\', String.raw`\\`).replaceAll("'", String.raw`\'`).replaceAll('\n', String.raw`\n`).replaceAll('\r', String.raw`\r`));
 
 /* ------------------------------------------------------------------ router */
 async function route(){
@@ -30,6 +31,15 @@ async function route(){
 }
 window.addEventListener('hashchange', route);
 
+/* Average monthly growth of the net worth over the previous `months` months, rounded to the hundred and floored at 0 (column "Epargne Mensuelle" of the "Solde" tab of Comptes.xlsm) */
+const SAVINGS_MONTHS = 24;
+function monthlySavings(totals, months = SAVINGS_MONTHS){
+  return totals.map((v, i) => {
+    const before = totals[i - months];
+    return v == null || before == null ? null : Math.max(0, Math.round((v - before) / months / 100) * 100);
+  });
+}
+
 /* ------------------------------------------------------------------ home */
 async function home(){
   const open = $('#openOnly') ? $('#openOnly').checked : true;
@@ -41,7 +51,9 @@ async function home(){
   const byYear = {}; shown.forEach(a => { const k = a.availability || 0; byYear[k] = (byYear[k] || 0) + a.balance_eur; });
   $('#main').innerHTML = `<div class="mut">Patrimoine</div><div class="big">${num(total)}</div>
   <label><input type="checkbox" id="openOnly" ${open ? 'checked' : ''} onchange="home()"> comptes ouverts seulement</label>
-  ${drawChart(nw.map(p => p.month), [{name: 'Patrimoine', color: 'var(--acc)', type: 'line', values: nw.map(p => p.total)}], {xticks: 12})}
+  ${drawChart(nw.map(p => p.month), [
+    {name: `Épargne mensuelle (moy. ${SAVINGS_MONTHS} mois)`, color: 'var(--pos-light)', type: 'bar', axis: 'right', unit: '€/mois', values: monthlySavings(nw.map(p => p.total))},
+    {name: 'Patrimoine', color: 'var(--acc)', type: 'line', values: nw.map(p => p.total)}], {xticks: 12})}
   <div class="row" style="align-items:start"><div style="flex:1;min-width:260px"><h3>Par banque</h3>${tbl(sumBy(a => a.bank))}</div>
   <div style="flex:1;min-width:260px"><h3>Par année de disponibilité</h3>${tbl(Object.entries(byYear).sort((a, b) => a[0] - b[0]).map(([k, v]) => [k === '0' ? 'Immédiate' : k, v]))}</div>
   <div style="flex:1;min-width:260px"><h3>Par type</h3>${tbl(sumBy(a => a.type))}</div></div>
@@ -95,34 +107,52 @@ async function recalc(force){
 }
 
 /* ------------------------------------------------------------------ account */
+function txRow(t, foreign, aid){
+  const native = foreign ? `<td class="n mut">${num(t.native_amount, '')}</td><td class="n mut">${num(t.native_balance, '')}</td>` : '';
+  const budget = t.in_budget ? ` <span class="mut">(${esc(t.in_budget)})</span>` : '';
+  return `<tr><td>${esc(t.date)}</td><td class="n ${cls(t.amount_eur)}">${num(t.amount_eur)}</td><td class="n">${num(t.balance_eur)}</td>${native}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
+  <td><button class="link" onclick="editTx(${esc(JSON.stringify(t))})">modifier</button><button class="link" onclick="delTx(${Number(t.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
+}
+const INTEREST_PERIODS = [['1 an', 'y1'], ['3 ans', 'y3'], ['5 ans', 'y5'], ['8 ans', 'y8'], ['Depuis le début', 'y_all']];
+function interestsTable(interests){
+  if (!interests) return '<div class="mut">Pas encore calculé</div>';
+  const rows = INTEREST_PERIODS.map(([l, k]) => `<tr><td>${l}</td><td class="n">${pct(interests[k])}</td></tr>`).join('');
+  return `<table>${rows}</table>`;
+}
+function depositRow(d, aid){
+  return `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_eur)}</td><td><button class="link" onclick="delDep(${Number(d.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
+}
+function depositsPanel(info, a, cur){
+  return `<div style="flex:1;min-width:260px"><h3>Rendements nets</h3>${interestsTable(info.interests)}
+  <button onclick="recalcOne('${jsq(a.id)}')">Recalculer</button>
+  <h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
+  <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;
+}
 let EDIT = null;
 async function account(id, msg = ''){
   const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions?limit=500'), meta()]);
-  const a = info.account, cur = sym(a.currency), foreign = a.currency !== 'EUR';
+  const a = info.account, cur = esc(sym(a.currency)), foreign = a.currency !== 'EUR';
   const hasDep = !['Courant', 'Autres', null].includes(a.type);
   const bank = a.bank || '';
   const subOpts = '<option value=""></option>' + m.categories.map(c => `<option>${esc(c.subcategory)}</option>`).join('');
   const modeFields = a.mode === 'snapshot' ? `<label>Solde (${cur})<input id="f_bal" size="12"></label>`
     : a.mode === 'shares' ? `<label>Nb de titres<input id="f_qty" size="10"></label><label>Prix unitaire<input id="f_px" size="10"></label>`
     : `<label>Montant (${cur})<input id="f_amt" size="12"></label>`;
+  const foreignHead = foreign ? `<th class="n">Montant ${cur}</th><th class="n">Solde ${cur}</th>` : '';
   const importBanks = ['BoursoBank', 'ING', 'LCL', 'UBS', 'Revolut', 'Yuh', 'generic'];
   $('#main').innerHTML = `<h2>${esc(a.id)} <span class="mut" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
   <div class="row"><button onclick="location.hash='#/'">← Retour</button>
   <button onclick="setStatus('${jsq(a.id)}','${a.status === 'Open' ? 'Closed' : 'Open'}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
   <a href="/api/account/${enc(a.id)}/export.csv"><button>Exporter CSV</button></a>
   ${a.mode === 'flow' || a.mode === 'static' ? `<label style="flex-direction:row;align-items:center;gap:6px">Importer <select id="imp_bank">${importBanks.map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('')}</select><input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : ''}</div>
-  <div id="imp"></div><div class="ok">${msg}</div>
+  <div id="imp"></div><div class="ok">${esc(msg)}</div>
   <div class="card"><b id="form_title">Nouvelle écriture</b><div class="row"><label>Date<input type="date" id="f_date" value="${new Date().toISOString().slice(0, 10)}"></label>${modeFields}
   <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
-  <div class="row" style="align-items:start"><div style="flex:3;min-width:520px"><div class="scroll"><table><tr><th>Date</th><th class="n">Montant €</th><th class="n">Solde €</th>${foreign ? `<th class="n">Montant ${cur}</th><th class="n">Solde ${cur}</th>` : ''}<th>Description</th><th>Sous-cat.</th><th></th></tr>
-  ${tr.map(t => `<tr><td>${t.date}</td><td class="n ${cls(t.amount_eur)}">${num(t.amount_eur)}</td><td class="n">${num(t.balance_eur)}</td>${foreign ? `<td class="n mut">${num(t.native_amount, '')}</td><td class="n mut">${num(t.native_balance, '')}</td>` : ''}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${t.in_budget ? ` <span class="mut">(${t.in_budget})</span>` : ''}</td>
-  <td><button class="link" onclick='editTx(${JSON.stringify(t).replace(/'/g, "&#39;")})'>modifier</button><button class="link" onclick="delTx(${t.id},'${jsq(a.id)}')">suppr.</button></td></tr>`).join('')}</table></div><div class="mut">${tr.length} dernières écritures</div></div>
-  ${hasDep ? `<div style="flex:1;min-width:260px"><h3>Rendements nets</h3>${info.interests ? `<table>${[['1 an', 'y1'], ['3 ans', 'y3'], ['5 ans', 'y5'], ['8 ans', 'y8'], ['Depuis le début', 'y_all']].map(([l, k]) => `<tr><td>${l}</td><td class="n">${pct(info.interests[k])}</td></tr>`).join('')}</table>` : '<div class="mut">Pas encore calculé</div>'}
-  <button onclick="recalcOne('${jsq(a.id)}')">Recalculer</button>
-  <h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
-  <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => `<tr><td>${d.date}</td><td class="n">${num(d.amount_eur)}</td><td><button class="link" onclick="delDep(${d.id},'${jsq(a.id)}')">suppr.</button></td></tr>`).join('')}</table></div></div>` : ''}</div>`;
+  <div class="row" style="align-items:start"><div style="flex:3;min-width:520px"><div class="scroll"><table><tr><th>Date</th><th class="n">Montant €</th><th class="n">Solde €</th>${foreignHead}<th>Description</th><th>Sous-cat.</th><th></th></tr>
+  ${tr.map(t => txRow(t, foreign, a.id)).join('')}</table></div><div class="mut">${tr.length} dernières écritures</div></div>
+  ${hasDep ? depositsPanel(info, a, cur) : ''}</div>`;
   EDIT = null;
 }
 function resetForm(){ EDIT = null; $('#form_title').textContent = 'Nouvelle écriture'; ['f_amt', 'f_bal', 'f_qty', 'f_px', 'f_desc', 'f_bud'].forEach(i => { if ($('#' + i)) $('#' + i).value = ''; }); }

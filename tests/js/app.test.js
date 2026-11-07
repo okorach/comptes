@@ -16,6 +16,8 @@ test('jsq escapes quotes and backslashes for inline JS string literals', () => {
   const jsq = load().get('jsq');
   assert.equal(jsq("l'a"), "l\\'a");
   assert.equal(jsq('a\\b'), 'a\\\\b');
+  assert.equal(jsq('a"b<c&d'), 'a&quot;b&lt;c&amp;d');
+  assert.equal(jsq('a\nb'), 'a\\nb');
 });
 
 test('enc url-encodes account ids', () => {
@@ -80,4 +82,51 @@ test('route renders server errors as text, not HTML', async () => {
   assert.equal(err.className, 'err');
   assert.equal(err.textContent, 'Erreur : <img src=x onerror=alert(1)>');
   assert.equal(els['#main'].innerHTML, 'Chargement…');
+});
+
+test('account page escapes untrusted values in text and in inline handlers', async () => {
+  const evil = '"><img src=x onerror=alert(1)>&quot;+alert(2)+&quot;';
+  const tx = {id: 7, date: '<b>2024</b>', amount_eur: 1, balance_eur: 1, description: evil, subcategory: evil, in_budget: '<i>1</i>'};
+  const account = {account: {id: evil, type: 'Courant', bank: evil, currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []};
+  const meta = {categories: [{subcategory: evil}], currencies: ['EUR']};
+  const body = url => (url.includes('transactions') ? [tx] : url.endsWith('/meta') ? meta : account);
+  const {ctx, els} = load(async url => ({json: async () => body(url)}));
+  await ctx.account('x', '<u>msg</u>');
+  const html = els['#main'].innerHTML;
+  assert.doesNotMatch(html, /<img/);
+  assert.doesNotMatch(html, /<b>2024|<i>1<|<u>msg/);
+  const edit = html.match(/onclick="editTx\(([^"]*)\)"/)[1];
+  const decoded = edit.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  assert.equal(JSON.parse(decoded).description, evil);
+});
+
+test('monthlySavings is the average monthly growth over the previous 24 months, rounded to 100', () => {
+  const {ctx, get} = load();
+  const totals = Array.from({length: 27}, (_, i) => 1000000 + i * 1234);
+  const s = ctx.monthlySavings(totals);
+  assert.equal(s.length, 27);
+  assert.ok(s.slice(0, 24).every(v => v === null));
+  assert.equal(s[24], 1200);  // (24 * 1234) / 24 = 1234 -> 1200
+  assert.equal(get('SAVINGS_MONTHS'), 24);
+  assert.equal(ctx.monthlySavings([100, null, 300], 1)[1], null);
+  assert.equal(ctx.monthlySavings([100, null, 300], 1)[2], null);
+  assert.equal(ctx.monthlySavings([0, 1234, 1234, 4000], 1)[1], 1200);
+});
+
+test('monthlySavings is floored at 0 when the net worth decreases', () => {
+  const s = load().ctx.monthlySavings([5000, 1000, 1000, 3000], 1);
+  assert.equal(s[1], 0);
+  assert.equal(s[2], 0);
+  assert.equal(s[3], 2000);
+});
+
+test('the right axis of the home chart starts at 0 when the savings are floored at 0', () => {
+  const {ctx} = load();
+  const savings = ctx.monthlySavings([5000, 1000, 1000, 3000], 1);
+  const html = ctx.drawChart(['a', 'b', 'c', 'd'], [
+    {color: '#0a0', type: 'bar', axis: 'right', values: savings},
+    {color: '#00f', type: 'line', values: [5000, 1000, 1000, 3000]}]);
+  const labels = [...html.matchAll(/text-anchor="start"[^>]*>([^<]*)</g)].map(m => m[1]);
+  assert.equal(labels[0], '0');
+  assert.ok(labels.every(l => !l.startsWith('-')));
 });

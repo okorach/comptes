@@ -1,5 +1,5 @@
-:root{--bg:#fff;--fg:#1c1f24;--mut:#6b7280;--line:#e5e7eb;--acc:#2563eb;--neg:#b91c1c;--pos:#15803d;--card:#f8fafc}
-@media(prefers-color-scheme:dark){:root{--bg:#14171c;--fg:#e6e8eb;--mut:#9aa3af;--line:#2a2f37;--acc:#60a5fa;--neg:#f87171;--pos:#4ade80;--card:#1b1f26}}
+:root{--bg:#fff;--fg:#1c1f24;--mut:#6b7280;--line:#e5e7eb;--acc:#2563eb;--neg:#b91c1c;--pos:#15803d;--pos-light:#4ade80;--card:#f8fafc}
+@media(prefers-color-scheme:dark){:root{--bg:#14171c;--fg:#e6e8eb;--mut:#9aa3af;--line:#2a2f37;--acc:#60a5fa;--neg:#f87171;--pos:#4ade80;--pos-light:#86efac;--card:#1b1f26}}
 *{box-sizing:border-box}
 body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--fg)}
 header{padding:10px 20px;border-bottom:1px solid var(--line);display:flex;gap:24px;align-items:baseline;flex-wrap:wrap}
@@ -20,3 +20,18 @@ button.link{border:0;background:none;color:var(--acc);padding:0 4px}
 .scroll{overflow-x:auto} .chips label{display:inline-flex;flex-direction:row;gap:4px;margin-right:10px;color:var(--fg)}
 .err{color:var(--neg);margin:6px 0} .ok{color:var(--pos)}
 svg text{fill:currentColor}
+.chart-range{position:relative;height:22px;margin-top:2px}
+.chart-range::before{content:"";position:absolute;left:0;right:0;top:50%;height:3px;margin-top:-1.5px;background:var(--line);border-radius:2px}
+.chart-range input{position:absolute;left:0;top:0;width:100%;height:22px;margin:0;padding:0;border:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none}
+.chart-range input::-webkit-slider-runnable-track{background:none}
+.chart-range input::-moz-range-track{background:none}
+.chart-range input::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:14px;height:14px;border-radius:50%;background:var(--acc);border:2px solid var(--bg);box-shadow:0 0 0 1px var(--acc);cursor:ew-resize}
+.chart-range input::-moz-range-thumb{pointer-events:auto;width:10px;height:10px;border-radius:50%;background:var(--acc);border:2px solid var(--bg);box-shadow:0 0 0 1px var(--acc);cursor:ew-resize}
+.chart-legend{font-size:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.chart-window{font-variant-numeric:tabular-nums}
+.chart-wrap{position:relative}
+.chart-hover{position:absolute;inset:0;pointer-events:none}
+.chart-guide{position:absolute;width:1px;background:currentColor;opacity:.3}
+.chart-dot{position:absolute;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;border:2px solid var(--bg)}
+.chart-tip{position:absolute;top:4px;padding:4px 8px;background:var(--card);border:1px solid var(--line);border-radius:6px;font-size:12px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.chart-tip b{font-variant-numeric:tabular-nums}
