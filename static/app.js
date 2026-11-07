@@ -32,7 +32,7 @@ async function route(){
 window.addEventListener('hashchange', route);
 
 /* Average monthly growth of the net worth over the previous `months` months, rounded to the hundred and floored at 0 (column "Epargne Mensuelle" of the "Solde" tab of Comptes.xlsm) */
-const SAVINGS_MONTHS = 12;
+const SAVINGS_MONTHS = 24;
 function monthlySavings(totals, months = SAVINGS_MONTHS){
   return totals.map((v, i) => {
     const before = totals[i - months];
