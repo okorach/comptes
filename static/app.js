@@ -244,7 +244,7 @@ async function importCommit(id){ const r = await api('account/' + enc(id) + '/im
 async function admin(msg = ''){
   const m = await meta();
   const fx = await api('fx?currency=CHF');
-  $('#main').innerHTML = `<h2>Administration</h2><div class="ok">${msg}</div>
+  $('#main').innerHTML = `<h2>Administration</h2><div class="ok">${esc(msg)}</div>
   <div class="card"><b>Nouveau compte</b><div class="row">
   <label>Nom<input id="n_id" size="22"></label><label>N° de compte<input id="n_nbr" size="16"></label>
   <label>Banque<input id="n_bank" list="banks" size="14"><datalist id="banks">${m.banks.map(b => `<option>${esc(b)}</option>`).join('')}</datalist></label>
@@ -261,6 +261,8 @@ async function admin(msg = ''){
   <div class="card"><b>Taux de change</b> <span class="mut">(unités de devise pour 1 € ; l'euro sert de pivot)</span><div class="row">
   <label>Devise<select id="x_cur" onchange="fxList()">${m.currencies.filter(c => c !== 'EUR').map(c => `<option>${c}</option>`).join('')}</select></label>
   <label>Date<input type="date" id="x_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Taux<input id="x_rate" size="8"></label><button onclick="addFx()">Ajouter</button></div>
+  <div class="row"><button onclick="refreshRates()">Mettre à jour depuis Internet</button><span id="fx_status" class="mut"></span></div>
+  <div class="mut" style="font-size:12px">Un taux par semaine (taux de référence de la BCE, via frankfurter.dev), depuis la plus ancienne donnée de chaque devise. Les semaines qui ont déjà un taux ne sont pas modifiées. Mise à jour automatique au démarrage de l'application si Internet est disponible ; les soldes sont alors recalculés.</div>
   <div id="fxl"></div></div>`;
   await fxList();
 }
@@ -270,6 +272,14 @@ async function setMaster(){
     META = null;
     await admin('Devise principale modifiée : tous les montants ont été recalculés');
   } catch (e) { $('#m_err').textContent = e.message; }
+}
+async function refreshRates(){
+  $('#fx_status').textContent = 'Mise à jour en cours…';
+  try {
+    const r = await api('fx/refresh', 'POST', {});
+    META = null;
+    await admin(r.message);
+  } catch (e) { $('#fx_status').textContent = e.message; }
 }
 async function fxList(){
   const cur = $('#x_cur').value, rows = await api('fx?currency=' + cur);

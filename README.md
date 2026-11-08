@@ -24,6 +24,7 @@ The database is a single SQLite file (`comptes.db`, git-ignored). Back it up lik
 | `BankImport*.bas` (BoursoBank, LCL, ING, UBS, Revolut, Yuh, generic CSV) | Import box on the account page, with preview and **duplicate detection** |
 | Export / Import CSV with metadata row | `Exporter CSV` / import « generic » |
 | Account creation form, exchange-rate tables | **Administration** page |
+| (manual rate tables) | **Exchange rates retrieved from the internet** (ECB reference rates through frankfurter.dev, no key): one rate per week, from the oldest data of each currency, only for the weeks that have none yet. Done in the background each time the app starts (if the internet is reachable, silently skipped otherwise) and with the « Mettre à jour depuis Internet » button; balances and yields are then recomputed. Set `COMPTES_NO_FX_UPDATE=1` to never go online |
 | (EUR only) | **Master currency** of the application (Administration page, EUR by default): totals, balances and yields of all accounts are computed in it, whatever the currency of each account. Changing it recomputes everything. Exchange rates stay stored as units of currency per EUR, so the master currency needs rates (EUR does not) |
 
 ## Rules reproduced from the workbook

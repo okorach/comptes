@@ -292,3 +292,26 @@ test('a master currency that is not a currency code is ignored', async () => {
   assert.doesNotMatch(els['#main'].innerHTML, /<img/);
   assert.match(els['#main'].innerHTML, /Solde €/);
 });
+
+test('administration page retrieves the exchange rates from the internet on demand and shows the outcome', async () => {
+  const calls = [];
+  const {ctx, els} = load(async (url, init) => {
+    calls.push({url, method: init?.method});
+    if (url.endsWith('/meta')) return {json: async () => ({categories: [], types: [], banks: [], currencies: ['CHF', 'EUR'], master_currency: 'EUR'})};
+    return {json: async () => (url.endsWith('fx/refresh') ? {added: 3, currencies: {CHF: 3}, errors: [], offline: false, message: '3 taux de change ajoutés <b>(CHF : 3)</b>'} : [])};
+  });
+  await settle();
+  await ctx.admin();
+  assert.match(els['#main'].innerHTML, /onclick="refreshRates\(\)"/);
+  await ctx.refreshRates();
+  assert.ok(calls.some(c => c.url === '/api/fx/refresh' && c.method === 'POST'));
+  assert.match(els['#main'].innerHTML, /3 taux de change ajoutés &lt;b&gt;/);   // the message is text, not HTML
+});
+
+test('a failed update of the exchange rates is shown', async () => {
+  const {ctx, els} = load(async url => ({json: async () => (url.endsWith('/meta') ? {categories: [], types: [], banks: [], currencies: ['EUR'], master_currency: 'EUR'} : url.endsWith('fx/refresh') ? {error: 'boom'} : [])}));
+  await settle();
+  await ctx.admin();
+  await ctx.refreshRates();
+  assert.match(els['#fx_status'].textContent, /boom/);
+});

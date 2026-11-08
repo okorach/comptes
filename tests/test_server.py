@@ -6,9 +6,10 @@ import unittest
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
+from unittest import mock
 
 from helpers import make_db
-from comptes import ops, server
+from comptes import ops, rates, server
 
 
 class ServerTest(unittest.TestCase):
@@ -87,6 +88,20 @@ class ServerTest(unittest.TestCase):
         finally:
             self.call("POST", "/api/master_currency", {"currency": "EUR"})
         self.assertEqual(self.call("GET", "/api/meta")["master_currency"], "EUR")
+
+    def test_refresh_of_the_exchange_rates(self):
+        with mock.patch.object(rates, "fetch_rates", return_value={"2030-01-07": 1.5}) as fetched:  # never the real internet
+            res = self.call("POST", "/api/fx/refresh")
+        self.assertEqual((res["offline"], res["errors"]), (False, []))
+        self.assertIn("taux de change", res["message"].lower())
+        self.assertEqual(res["added"], sum(res["currencies"].values()))
+        self.assertEqual(fetched.call_count, len(res["currencies"]) + len(res["errors"]))
+
+    def test_refresh_when_offline(self):
+        with mock.patch.object(rates, "fetch_rates", side_effect=OSError("no network")):
+            res = self.call("POST", "/api/fx/refresh")
+        self.assertIn(res["offline"], (True, False))  # offline only if there is something to retrieve
+        self.assertEqual(res["added"], 0)
 
     def test_import_preview(self):
         csv = "d;a;b;c\n2024-03-01;x;SHOP;-3,10\n".encode()

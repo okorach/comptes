@@ -3,7 +3,7 @@ import base64, csv, io, json, os, re, sys, mimetypes
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, unquote
 from .db import connect, DEFAULT_DB
-from . import calc, ops, budget, interest, bankimport
+from . import calc, ops, budget, interest, bankimport, rates
 
 STATIC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 
@@ -92,6 +92,9 @@ class Handler(BaseHTTPRequestHandler):
             return {"ok": True, "n": interest.recalc_all(con, force=bool(d.get("force")))}
         if path == "master_currency" and m == "POST":
             ops.set_master_currency(con, self._body().get("currency")); return {"ok": True}
+        if path == "fx/refresh" and m == "POST":
+            result = rates.refresh(con)
+            return {**result, "message": rates.describe(result)}
         if path == "fx":
             if m == "POST":
                 d = self._body(); ops.add_fx(con, d["currency"], d["date"], d["rate"]); return {"ok": True}
@@ -167,6 +170,7 @@ def main():
         sys.exit(f"Database not found: {db}\nRun first: python -m comptes.import_xlsx <path to Comptes.xlsm>")
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     srv.db_path = db
+    rates.update_in_background(db)  # missing exchange rates, if the internet is reachable
     print(f"Comptes running on http://localhost:{port}  (Ctrl+C to stop)")
     try:
         srv.serve_forever()
