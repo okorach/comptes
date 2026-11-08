@@ -101,6 +101,18 @@ def add_fx(con, cur, date, rate):
     con.commit()
 
 
+def recompute_everything(con: sqlite3.Connection) -> None:
+    """Recomputes, with the current exchange rates and master currency, the balances of all accounts, the deposits and the yields.
+    The caller commits."""
+    fx = calc.Fx(con)
+    for (acc,) in con.execute("SELECT id FROM accounts").fetchall():
+        calc.recompute_account(con, acc, fx)
+    for d in con.execute("SELECT d.id,d.date,d.native_amount,a.currency FROM deposits d JOIN accounts a ON a.id=d.account").fetchall():
+        if d["native_amount"] is not None:
+            con.execute("UPDATE deposits SET amount_main=? WHERE id=?", (d["native_amount"] / fx.rate(d["currency"], d["date"]), d["id"]))
+    interest.recalc_all(con, force=True)
+
+
 def set_master_currency(con: sqlite3.Connection, currency: str) -> None:
     """Changes the currency of the application: every amount, balance and yield expressed in it is recomputed.
     EUR, or a currency with exchange rates, is required."""
@@ -114,14 +126,8 @@ def set_master_currency(con: sqlite3.Connection, currency: str) -> None:
                              "WHERE d.native_amount IS NULL AND d.amount_main IS NOT NULL").fetchall():
             con.execute("UPDATE deposits SET native_amount=? WHERE id=?", (d["amount_main"] * old_fx.rate(d["currency"], d["date"]), d["id"]))
         con.execute("INSERT OR REPLACE INTO params VALUES('master_currency',?)", (cur,))
-        fx = calc.Fx(con)
-        fx.per_eur(cur, calc.today_iso())  # fails when there is no exchange rate for this currency
-        for (acc,) in con.execute("SELECT id FROM accounts").fetchall():
-            calc.recompute_account(con, acc, fx)
-        for d in con.execute("SELECT d.id,d.date,d.native_amount,a.currency FROM deposits d JOIN accounts a ON a.id=d.account").fetchall():
-            if d["native_amount"] is not None:
-                con.execute("UPDATE deposits SET amount_main=? WHERE id=?", (d["native_amount"] / fx.rate(d["currency"], d["date"]), d["id"]))
-        interest.recalc_all(con, force=True)
+        calc.Fx(con).per_eur(cur, calc.today_iso())  # fails when there is no exchange rate for this currency
+        recompute_everything(con)
     except Exception:
         con.rollback()
         raise
