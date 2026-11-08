@@ -147,3 +147,68 @@ test('rateCells renders one cell per period', () => {
   assert.equal(cells.match(/<td class="n">/g).length, 5);
   assert.equal(cells.match(/<small/g).length, 3);
 });
+
+const FX_ACCOUNT = {account: {id: 'Suisse', type: 'Courant', bank: 'B', currency: 'CHF', status: 'Open', mode: 'flow'}, interests: null, deposits: []};
+const FX_META = {categories: [], currencies: ['CHF', 'USD', 'EUR', 'USD']};
+const fxPage = txs => load(async url => ({json: async () => (url.includes('transactions') ? txs : url.endsWith('/meta') ? FX_META : FX_ACCOUNT)}));
+const TX = {id: 1, date: '2024-01-01', amount_eur: -80, balance_eur: -80, native_amount: -160, native_balance: -160, description: 'US', in_budget: null};
+
+test('account page of a flow account offers an original amount in another currency, without the currency of the account', async () => {
+  const {ctx, els} = fxPage([TX]);
+  await ctx.account('Suisse');
+  const html = els['#main'].innerHTML;
+  const options = html.match(/id="f_fxc">(.*?)<\/select>/)[1];
+  assert.match(options, /<option>USD<\/option>/);
+  assert.match(options, /<option>EUR<\/option>/);
+  assert.doesNotMatch(options, /CHF/);
+  assert.equal(options.match(/USD/g).length, 1);
+  assert.match(html, /id="f_fxa"/);
+});
+
+test('balance and snapshot accounts do not take an original amount', async () => {
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? FX_META : {...FX_ACCOUNT, account: {...FX_ACCOUNT.account, mode: 'snapshot'}})}));
+  await ctx.account('Suisse');
+  assert.doesNotMatch(els['#main'].innerHTML, /f_fxa/);
+});
+
+test('transactions table shows the original amount and currency next to the amount in the account currency', async () => {
+  const {ctx, els} = fxPage([{...TX, fx_currency: 'USD', fx_amount: -100, fx_auto: 1}, {...TX, id: 2, fx_currency: null, fx_amount: null}]);
+  await ctx.account('Suisse');
+  const html = els['#main'].innerHTML;
+  assert.match(html, /Montant CHF[\s\S]*Solde CHF[\s\S]*Montant d'origine[\s\S]*Devise d'origine[\s\S]*Description/);
+  const row = plain(html.match(/<tr><td>2024-01-01<\/td>.*?<\/tr>/s)[0]);
+  assert.match(row, /-160,00[\s\S]*-160,00[\s\S]*-100,00\s*<\/td><td>USD<\/td><td>US/);
+});
+
+test('the original amount columns only appear once a transaction has one', async () => {
+  const {ctx, els} = fxPage([TX]);
+  await ctx.account('Suisse');
+  assert.doesNotMatch(els['#main'].innerHTML, /Montant d'origine<\/th>|Montant d'origine <button/);
+});
+
+test('editing a converted transaction leaves the amount empty so that it is converted again', async () => {
+  const {ctx, els} = fxPage([]);
+  await ctx.account('Suisse');
+  ctx.editTx({...TX, fx_currency: 'USD', fx_amount: -100, fx_auto: 1});
+  assert.equal(els['#f_amt'].value, '');
+  assert.equal(els['#f_fxc'].value, 'USD');
+  assert.equal(els['#f_fxa'].value, -100);
+  ctx.editTx({...TX, fx_currency: 'USD', fx_amount: -100, fx_auto: 0, native_amount: -165});
+  assert.equal(els['#f_amt'].value, -165);
+});
+
+test('saving sends the original amount and currency', async () => {
+  const calls = [];
+  const {ctx, mk} = load(async (url, init) => {
+    calls.push({url, body: init?.body && JSON.parse(init.body)});
+    return {json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? FX_META : FX_ACCOUNT)};
+  });
+  await ctx.account('Suisse');
+  mk('#f_date').value = '2024-03-01';
+  mk('#f_fxc').value = 'USD';
+  mk('#f_fxa').value = '-100';
+  await ctx.saveTx('Suisse');
+  const post = calls.find(c => c.body && c.body.date === '2024-03-01');
+  assert.equal(post.body.fx_currency, 'USD');
+  assert.equal(post.body.fx_amount, '-100');
+});

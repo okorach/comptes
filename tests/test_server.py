@@ -57,6 +57,16 @@ class ServerTest(unittest.TestCase):
         self.call("DELETE", f"/api/transaction/{tid}")
         self.assertEqual(len(self.call("GET", acc + "/transactions?limit=10")), 1)
 
+    def test_transaction_in_another_currency(self):
+        acc = "/api/account/Suisse"
+        self.call("POST", "/api/fx", {"currency": "USD", "date": "2020-01-01", "rate": 1.25})
+        self.call("POST", acc + "/transactions", {"date": "2022-02-01", "fx_currency": "USD", "fx_amount": "-100", "description": "US"})
+        row = self.call("GET", acc + "/transactions?limit=1")[0]
+        self.assertEqual((row["fx_currency"], row["fx_amount"], row["fx_auto"]), ("USD", -100.0, 1))
+        self.assertAlmostEqual(row["native_amount"], -160.0)
+        self.assertAlmostEqual(row["native_balance"], -160.0)
+        self.assertEqual(self.call("POST", acc + "/transactions", {"date": "2022-02-01", "fx_currency": "USD"})["HTTP"], 400)
+
     def test_import_preview(self):
         csv = "d;a;b;c\n2024-03-01;x;SHOP;-3,10\n".encode()
         res = self.call("POST", "/api/account/Courant/import",

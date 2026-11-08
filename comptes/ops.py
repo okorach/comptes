@@ -8,12 +8,33 @@ def _f(x):
     return float(str(x).replace(",", ".").replace(" ", ""))
 
 
+def _original_amount(con, acc, d):
+    """(fx_currency, fx_amount, fx_auto) of a transaction made in a currency other than the one of the account.
+    Only flow / static accounts take them; without an entered amount in the currency of the account, it is converted."""
+    cur = (d.get("fx_currency") or "").strip().upper() or None
+    amt = _f(d.get("fx_amount"))
+    if cur is None and amt is None:
+        return None, None, 0
+    if cur is None or amt is None:
+        raise ValueError("devise et montant d'origine vont ensemble")
+    a = con.execute("SELECT currency,mode FROM accounts WHERE id=?", (acc,)).fetchone()
+    if a["mode"] not in ("flow", "static"):
+        raise ValueError("montant dans une autre devise impossible sur ce type de compte")
+    if cur == a["currency"]:
+        raise ValueError("la devise d'origine doit être différente de celle du compte")
+    auto = _f(d.get("native_amount")) is None
+    if auto:
+        calc.Fx(con).rate(cur, d["date"])  # fails early when there is no exchange rate
+    return cur, amt, int(auto)
+
+
 def add_transaction(con, acc, d):
+    fx_cur, fx_amt, fx_auto = _original_amount(con, acc, d)
     cur = con.execute(
-        "INSERT INTO transactions(account,date,native_amount,native_balance,description,subcategory,in_budget,qty,price)"
-        " VALUES(?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO transactions(account,date,native_amount,native_balance,description,subcategory,in_budget,qty,price,"
+        "fx_currency,fx_amount,fx_auto) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
         (acc, d["date"], _f(d.get("native_amount")), _f(d.get("native_balance")), d.get("description"),
-         d.get("subcategory") or None, _f(d.get("in_budget")), _f(d.get("qty")), _f(d.get("price"))))
+         d.get("subcategory") or None, _f(d.get("in_budget")), _f(d.get("qty")), _f(d.get("price")), fx_cur, fx_amt, fx_auto))
     calc.recompute_account(con, acc)
     con.commit()
     return cur.lastrowid
@@ -23,11 +44,12 @@ def update_transaction(con, tid, d):
     row = con.execute("SELECT account FROM transactions WHERE id=?", (tid,)).fetchone()
     if not row:
         return False
+    fx_cur, fx_amt, fx_auto = _original_amount(con, row["account"], d)
     con.execute(
         "UPDATE transactions SET date=?,native_amount=?,native_balance=?,description=?,subcategory=?,"
-        "in_budget=?,qty=?,price=? WHERE id=?",
+        "in_budget=?,qty=?,price=?,fx_currency=?,fx_amount=?,fx_auto=? WHERE id=?",
         (d["date"], _f(d.get("native_amount")), _f(d.get("native_balance")), d.get("description"),
-         d.get("subcategory") or None, _f(d.get("in_budget")), _f(d.get("qty")), _f(d.get("price")), tid))
+         d.get("subcategory") or None, _f(d.get("in_budget")), _f(d.get("qty")), _f(d.get("price")), fx_cur, fx_amt, fx_auto, tid))
     calc.recompute_account(con, row["account"])
     con.commit()
     return True

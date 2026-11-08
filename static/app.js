@@ -110,10 +110,11 @@ async function recalc(){
 }
 
 /* ------------------------------------------------------------------ account */
-function txRow(t, foreign, aid){
+function txRow(t, foreign, aid, hasFx = false){
   const native = foreign ? `<td class="n mut">${num(t.native_amount, '')}</td><td class="n mut">${num(t.native_balance, '')}</td>` : '';
+  const origin = hasFx ? `<td class="n mut">${num(t.fx_amount, '')}</td><td>${esc(t.fx_currency)}</td>` : '';
   const budget = t.in_budget ? ` <span class="mut">(${esc(t.in_budget)})</span>` : '';
-  return `<tr><td>${esc(t.date)}</td><td class="n ${cls(t.amount_eur)}">${num(t.amount_eur)}</td><td class="n">${num(t.balance_eur)}</td>${native}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
+  return `<tr><td>${esc(t.date)}</td><td class="n ${cls(t.amount_eur)}">${num(t.amount_eur)}</td><td class="n">${num(t.balance_eur)}</td>${native}${origin}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
   <td><button class="link" onclick="editTx(${esc(JSON.stringify(t))})">modifier</button><button class="link" onclick="delTx(${Number(t.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
 }
 const NATIVE_KEY = {y1: 'n1', y3: 'n3', y5: 'n5', y8: 'n8', y_all: 'n_all'};
@@ -150,21 +151,29 @@ function depositsPanel(info, a, cur){
   <h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
   <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;
 }
-const txColumns = (foreign, cur) => [
+const txColumns = (foreign, cur, hasFx) => [
   {label: 'Date', value: t => t.date}, {label: 'Montant €', num: true, value: t => t.amount_eur}, {label: 'Solde €', num: true, value: t => t.balance_eur},
   ...(foreign ? [{label: `Montant ${cur}`, num: true, value: t => t.native_amount}, {label: `Solde ${cur}`, num: true, value: t => t.native_balance}] : []),
+  ...(hasFx ? [{label: "Montant d'origine", num: true, value: t => t.fx_amount}, {label: "Devise d'origine", value: t => t.fx_currency}] : []),
   {label: 'Description', value: t => t.description}, {label: 'Sous-cat.', value: t => t.subcategory}, {label: '', sort: false, filter: false, value: () => null},
 ];
+/* Optional original amount, for a transaction in a currency other than the one of the account */
+const fxFields = (a, m) => {
+  const opts = [...new Set(m.currencies)].filter(c => c !== a.currency).map(c => `<option>${esc(c)}</option>`).join('');
+  return `<label>Devise d'origine<select id="f_fxc"><option value=""></option>${opts}</select></label><label>Montant d'origine<input id="f_fxa" size="10"></label>`;
+};
 let EDIT = null;
 async function account(id, msg = ''){
   const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions?limit=500'), meta()]);
   const a = info.account, cur = esc(sym(a.currency)), foreign = a.currency !== 'EUR';
   const hasDep = !['Courant', 'Autres', null].includes(a.type);
+  const fx = a.mode === 'flow' || a.mode === 'static';  // these accounts take transactions in a currency other than their own
   const bank = a.bank || '';
+  const hasFx = tr.some(t => t.fx_currency);
   const subOpts = '<option value=""></option>' + m.categories.map(c => `<option>${esc(c.subcategory)}</option>`).join('');
   const modeFields = a.mode === 'snapshot' ? `<label>Solde (${cur})<input id="f_bal" size="12"></label>`
     : a.mode === 'shares' ? `<label>Nb de titres<input id="f_qty" size="10"></label><label>Prix unitaire<input id="f_px" size="10"></label>`
-    : `<label>Montant (${cur})<input id="f_amt" size="12"></label>`;
+    : `<label>Montant (${cur})<input id="f_amt" size="12" placeholder="${fx ? 'auto' : ''}" title="${fx ? "Vide : converti depuis le montant d'origine" : ''}"></label>${fx ? fxFields(a, m) : ''}`;
   const importBanks = ['BoursoBank', 'ING', 'LCL', 'UBS', 'Revolut', 'Yuh', 'generic'];
   $('#main').innerHTML = `<h2>${esc(a.id)} <span class="mut" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
   <div class="row"><button onclick="location.hash='#/'">← Retour</button>
@@ -176,15 +185,16 @@ async function account(id, msg = ''){
   <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
-  <div class="row" style="align-items:start"><div style="flex:3;min-width:520px">${dataTable(txColumns(foreign, sym(a.currency)), tr, t => txRow(t, foreign, a.id), {noun: 'écritures (les plus récentes)'})}</div>
+  <div class="row" style="align-items:start"><div style="flex:3;min-width:520px">${dataTable(txColumns(foreign, sym(a.currency), hasFx), tr, t => txRow(t, foreign, a.id, hasFx), {noun: 'écritures (les plus récentes)'})}</div>
   ${hasDep ? depositsPanel(info, a, cur) : ''}</div>`;
   EDIT = null;
 }
-function resetForm(){ EDIT = null; $('#form_title').textContent = 'Nouvelle écriture'; ['f_amt', 'f_bal', 'f_qty', 'f_px', 'f_desc', 'f_bud'].forEach(i => { if ($('#' + i)) $('#' + i).value = ''; }); }
+function resetForm(){ EDIT = null; $('#form_title').textContent = 'Nouvelle écriture'; ['f_amt', 'f_bal', 'f_qty', 'f_px', 'f_desc', 'f_bud', 'f_fxc', 'f_fxa'].forEach(i => { if ($('#' + i)) $('#' + i).value = ''; }); }
 function editTx(t){
   EDIT = t.id; $('#form_title').textContent = 'Modifier l\'écriture #' + t.id;
   $('#f_date').value = t.date; $('#f_desc').value = t.description || ''; $('#f_sub').value = t.subcategory || '';
-  if ($('#f_amt')) $('#f_amt').value = t.native_amount ?? '';
+  if ($('#f_amt')) $('#f_amt').value = t.fx_auto ? '' : t.native_amount ?? '';  // a converted amount is recomputed, not entered
+  if ($('#f_fxa')) { $('#f_fxc').value = t.fx_currency ?? ''; $('#f_fxa').value = t.fx_amount ?? ''; }
   if ($('#f_bal')) $('#f_bal').value = t.native_balance ?? '';
   if ($('#f_qty')) { $('#f_qty').value = t.qty ?? ''; $('#f_px').value = t.price ?? ''; }
   if ($('#f_bud')) $('#f_bud').value = t.in_budget ?? '';
@@ -192,7 +202,7 @@ function editTx(t){
 }
 async function saveTx(id){
   const g = i => $('#' + i) ? $('#' + i).value : null;
-  const body = {date: g('f_date'), description: g('f_desc'), subcategory: g('f_sub'), native_amount: g('f_amt'), native_balance: g('f_bal'), qty: g('f_qty'), price: g('f_px'), in_budget: g('f_bud')};
+  const body = {date: g('f_date'), description: g('f_desc'), subcategory: g('f_sub'), native_amount: g('f_amt'), native_balance: g('f_bal'), qty: g('f_qty'), price: g('f_px'), in_budget: g('f_bud'), fx_currency: g('f_fxc'), fx_amount: g('f_fxa')};
   try {
     if (!body.date) throw new Error('Date requise');
     if (EDIT) await api('transaction/' + EDIT, 'PUT', body); else await api('account/' + enc(id) + '/transactions', 'POST', body);

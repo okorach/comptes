@@ -71,6 +71,14 @@ class Fx:
         return rs[i - 1] if i else rs[0]
 
 
+def flow_amount(r, fx, rate):
+    """Amount of a flow transaction in the currency of the account (`rate` = rate of that currency on the date of the transaction).
+    A transaction in another currency without an entered amount is converted from its original amount."""
+    if r["fx_auto"] and r["fx_currency"] and r["fx_amount"] is not None:
+        return r["fx_amount"] / fx.rate(r["fx_currency"], r["date"]) * rate
+    return r["native_amount"] if r["native_amount"] is not None else 0.0
+
+
 def recompute_account(con, acc, fx=None):
     """Recompute EUR/native amounts and balances for one account from its input fields.
     flow/static: native_amount is the input; snapshot: native_balance; shares: qty*price."""
@@ -82,7 +90,7 @@ def recompute_account(con, acc, fx=None):
     for r in rows:
         rate = fx.rate(cur, r["date"])
         if mode in ("flow", "static"):
-            na = r["native_amount"] if r["native_amount"] is not None else 0.0
+            na = flow_amount(r, fx, rate)
             nb = (prev_nb or 0.0) + na
             ab, eb = na / rate, nb / rate
             ea = ab

@@ -119,7 +119,8 @@ class Handler(BaseHTTPRequestHandler):
                 if m == "POST":
                     return {"id": ops.add_transaction(con, acc, self._body())}
                 rows = con.execute(
-                    "SELECT id,date,amount_eur,balance_eur,native_amount,native_balance,description,subcategory,in_budget,qty,price "
+                    "SELECT id,date,amount_eur,balance_eur,native_amount,native_balance,description,subcategory,in_budget,qty,price,"
+                    "fx_currency,fx_amount,fx_auto "
                     "FROM transactions WHERE account=? ORDER BY date DESC, id DESC LIMIT ?",
                     (acc, int(q.get("limit", 500)))).fetchall()
                 return [dict(r) for r in rows]

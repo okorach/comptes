@@ -17,8 +17,10 @@ CREATE TABLE IF NOT EXISTS params(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS transactions(
   id INTEGER PRIMARY KEY AUTOINCREMENT, account TEXT NOT NULL REFERENCES accounts(id),
   date TEXT NOT NULL, amount_eur REAL, balance_eur REAL,
-  native_amount REAL, native_balance REAL,
-  description TEXT, subcategory TEXT, in_budget REAL, qty REAL, price REAL
+  native_amount REAL, native_balance REAL,  -- amounts in the currency of the account
+  description TEXT, subcategory TEXT, in_budget REAL, qty REAL, price REAL,
+  fx_currency TEXT, fx_amount REAL,         -- original amount, when the transaction is in a currency other than the one of the account
+  fx_auto INTEGER DEFAULT 0                 -- 1: native_amount is converted from fx_amount, 0: it was entered
 );
 CREATE INDEX IF NOT EXISTS ix_tr_acc ON transactions(account, date);
 CREATE TABLE IF NOT EXISTS deposits(
@@ -34,14 +36,20 @@ CREATE TABLE IF NOT EXISTS interests(
 
 
 NATIVE_INTEREST_COLUMNS = ("n1", "n3", "n5", "n8", "n_all")
+# Columns introduced after the first version of the database: table -> {column: definition}
+ADDED_COLUMNS = {
+    "interests": {c: "REAL" for c in NATIVE_INTEREST_COLUMNS},
+    "transactions": {"fx_currency": "TEXT", "fx_amount": "REAL", "fx_auto": "INTEGER DEFAULT 0"},
+}
 
 
 def _migrate(con: sqlite3.Connection) -> None:
     """Adds the columns introduced after the first version of the database"""
-    cols = {r[1] for r in con.execute("PRAGMA table_info(interests)")}
-    for c in NATIVE_INTEREST_COLUMNS:
-        if c not in cols:
-            con.execute(f"ALTER TABLE interests ADD COLUMN {c} REAL")
+    for table, added in ADDED_COLUMNS.items():
+        cols = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+        for name, definition in added.items():
+            if name not in cols:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
 
 def connect(path=None):
