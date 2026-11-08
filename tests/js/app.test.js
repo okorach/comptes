@@ -284,3 +284,11 @@ test('administration page shows the refusal of an unknown master currency', asyn
   await ctx.setMaster();
   assert.match(els['#m_err'].textContent, /no FX rates for JPY/);
 });
+
+test('a hostile master currency from the server is escaped everywhere it is displayed', async () => {
+  const evil = '<img src=x onerror=alert(1)>';
+  const {ctx, els} = masterPage(evil, {networth: [{month: '2024-01', total: 5}, {month: '2024-02', total: 6}]});
+  await ctx.home();
+  assert.doesNotMatch(els['#main'].innerHTML, /<img/);
+  assert.match(els['#main'].innerHTML, /&lt;img/);
+});

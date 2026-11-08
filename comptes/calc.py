@@ -74,7 +74,7 @@ class Fx:
             ds, rs = self.d.setdefault(cur, ([], []))
             ds.append(date); rs.append(rate)
 
-    def per_eur(self, cur, date):
+    def per_eur(self, cur: str | None, date: str) -> float:
         if cur == "EUR" or cur is None:
             return 1.0
         ds, rs = self.d.get(cur, ([], []))

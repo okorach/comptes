@@ -151,7 +151,7 @@ function chartRange(id, which, value){
 }
 
 /* Value with its unit: the one of the series (s.unit), else of the chart (opt.unit), € by default */
-const chartValue = (c, v, s) => `${Math.round(v).toLocaleString('fr-FR')} ${s?.unit ?? c.opt.unit ?? '€'}`;
+const chartValue = (c, v, s) => esc(`${Math.round(v).toLocaleString('fr-FR')} ${s?.unit ?? c.opt.unit ?? '€'}`);
 
 /* Hover: a guide line, a dot on each line and a tooltip with the values of the data point below the mouse */
 function chartPointAt(c, svgX){
