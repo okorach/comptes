@@ -1,4 +1,4 @@
-// Loads the browser scripts (static/charts.js, static/app.js) into a vm context with a minimal DOM stub.
+// Loads the browser scripts (static/charts.js, tables.js, app.js) into a vm context with a minimal DOM stub.
 const fs = require('fs'), path = require('path'), vm = require('vm');
 
 const STATIC = path.join(__dirname, '..', '..', 'static');
@@ -24,7 +24,7 @@ function load(fetchImpl) {
     location: {hash: ''}, window: {addEventListener() {}, scrollTo() {}}, confirm: () => true, alert: m => { throw new Error('alert: ' + m); },
   };
   vm.createContext(ctx);
-  for (const f of ['charts.js', 'app.js']) {
+  for (const f of ['charts.js', 'tables.js', 'app.js']) {
     const file = path.join(STATIC, f);
     vm.runInContext(fs.readFileSync(file, 'utf8') + ';', ctx, {filename: file});
   }

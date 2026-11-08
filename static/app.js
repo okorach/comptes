@@ -57,9 +57,14 @@ async function home(){
   <div class="row" style="align-items:start"><div style="flex:1;min-width:260px"><h3>Par banque</h3>${tbl(sumBy(a => a.bank))}</div>
   <div style="flex:1;min-width:260px"><h3>Par année de disponibilité</h3>${tbl(Object.entries(byYear).sort((a, b) => a[0] - b[0]).map(([k, v]) => [k === '0' ? 'Immédiate' : k, v]))}</div>
   <div style="flex:1;min-width:260px"><h3>Par type</h3>${tbl(sumBy(a => a.type))}</div></div>
-  <h3>Comptes</h3><div class="scroll"><table><tr><th>Compte</th><th>Type</th><th>Banque</th><th>Dispo.</th><th>Dernière date</th><th class="n">Solde (devise)</th><th class="n">Solde €</th></tr>
-  ${shown.sort((a, b) => b.balance_eur - a.balance_eur).map(a => `<tr class="click" onclick="location.hash='#/account/${enc(a.id)}'"><td>${esc(a.id)}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td><td>${a.availability || ''}</td><td>${a.last_date || ''}</td><td class="n mut">${a.currency !== 'EUR' ? num(a.balance_native, sym(a.currency)) : ''}</td><td class="n ${cls(a.balance_eur)}">${num(a.balance_eur)}</td></tr>`).join('')}</table></div>`;
+  <h3>Comptes</h3>${dataTable(HOME_COLUMNS, shown.sort((a, b) => b.balance_eur - a.balance_eur), homeRow, {noun: 'comptes'})}`;
 }
+const HOME_COLUMNS = [
+  {label: 'Compte', value: a => a.id}, {label: 'Type', value: a => a.type}, {label: 'Banque', value: a => a.bank},
+  {label: 'Dispo.', value: a => a.availability || null}, {label: 'Dernière date', value: a => a.last_date},
+  {label: 'Solde (devise)', num: true, value: a => a.currency === 'EUR' ? null : a.balance_native}, {label: 'Solde €', num: true, value: a => a.balance_eur},
+];
+const homeRow = a => `<tr class="click" onclick="location.hash='#/account/${enc(a.id)}'"><td>${esc(a.id)}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td><td>${a.availability || ''}</td><td>${a.last_date || ''}</td><td class="n mut">${a.currency === 'EUR' ? '' : num(a.balance_native, sym(a.currency))}</td><td class="n ${cls(a.balance_eur)}">${num(a.balance_eur)}</td></tr>`;
 
 /* ------------------------------------------------------------------ spending */
 let SP = {group: 'month', months: 36, exclude: null};
@@ -97,8 +102,7 @@ async function interests(msg = ''){
   $('#main').innerHTML = `<h2>Rendements annualisés (nets d'impôt)</h2>
   <div class="row"><button class="primary" onclick="recalc()">Recalculer</button><span class="ok">${msg}</span></div>
   <div class="mut" style="font-size:12px">Taux actuariel équivalent à l'ancien « Valeur cible » d'Excel : solde initial + versements capitalisés = solde final. Net = brut × (1 − fiscalité du compte).</div>
-  <table><tr><th>Compte</th><th>Type</th><th>Calculé le</th><th class="n">1 an</th><th class="n">3 ans</th><th class="n">5 ans</th><th class="n">8 ans</th><th class="n">Depuis le début</th></tr>
-  ${rows.map(interestRow).join('')}</table>`;
+  ${dataTable(INTEREST_COLUMNS, rows, interestRow, {noun: 'comptes'})}`;
 }
 async function recalc(){
   const r = await api('interests/recalc', 'POST', {force: true});
@@ -124,11 +128,13 @@ const rateHtml = (v, native, currency) => {
   if (v == null) return '<span class="mut">–</span>';
   return `<span class="${v < 0 ? 'neg' : ''}">${pct(v)}</span>${nativeRateHtml(native, currency)}`;
 };
-const interestRow = r => {
-  const calc = (r.calc_date || '').replace('T', ' ').slice(0, 16);
-  return `<tr class="click" onclick="location.hash='#/account/${enc(r.account)}'"><td>${esc(r.account)}</td><td>${esc(r.type)}</td><td>${calc}</td>${rateCells(r)}</tr>`;
-};
+const calcDate = r => (r.calc_date || '').replace('T', ' ').slice(0, 16);
+const interestRow = r => `<tr class="click" onclick="location.hash='#/account/${enc(r.account)}'"><td>${esc(r.account)}</td><td>${esc(r.type)}</td><td>${calcDate(r)}</td>${rateCells(r)}</tr>`;
 const rateCells = r => Object.entries(NATIVE_KEY).map(([y, n]) => `<td class="n">${rateHtml(r[y], r[n], r.currency)}</td>`).join('');
+const INTEREST_COLUMNS = [
+  {label: 'Compte', value: r => r.account}, {label: 'Type', value: r => r.type}, {label: 'Calculé le', value: r => calcDate(r)},
+  ...INTEREST_PERIODS.map(([label, key]) => ({label, num: true, filter: false, value: r => r[key]})),
+];
 
 function interestsTable(interests, currency){
   if (!interests) return '<div class="mut">Pas encore calculé</div>';
@@ -144,6 +150,11 @@ function depositsPanel(info, a, cur){
   <h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
   <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;
 }
+const txColumns = (foreign, cur) => [
+  {label: 'Date', value: t => t.date}, {label: 'Montant €', num: true, value: t => t.amount_eur}, {label: 'Solde €', num: true, value: t => t.balance_eur},
+  ...(foreign ? [{label: `Montant ${cur}`, num: true, value: t => t.native_amount}, {label: `Solde ${cur}`, num: true, value: t => t.native_balance}] : []),
+  {label: 'Description', value: t => t.description}, {label: 'Sous-cat.', value: t => t.subcategory}, {label: '', sort: false, filter: false, value: () => null},
+];
 let EDIT = null;
 async function account(id, msg = ''){
   const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions?limit=500'), meta()]);
@@ -154,7 +165,6 @@ async function account(id, msg = ''){
   const modeFields = a.mode === 'snapshot' ? `<label>Solde (${cur})<input id="f_bal" size="12"></label>`
     : a.mode === 'shares' ? `<label>Nb de titres<input id="f_qty" size="10"></label><label>Prix unitaire<input id="f_px" size="10"></label>`
     : `<label>Montant (${cur})<input id="f_amt" size="12"></label>`;
-  const foreignHead = foreign ? `<th class="n">Montant ${cur}</th><th class="n">Solde ${cur}</th>` : '';
   const importBanks = ['BoursoBank', 'ING', 'LCL', 'UBS', 'Revolut', 'Yuh', 'generic'];
   $('#main').innerHTML = `<h2>${esc(a.id)} <span class="mut" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
   <div class="row"><button onclick="location.hash='#/'">← Retour</button>
@@ -166,8 +176,7 @@ async function account(id, msg = ''){
   <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
-  <div class="row" style="align-items:start"><div style="flex:3;min-width:520px"><div class="scroll"><table><tr><th>Date</th><th class="n">Montant €</th><th class="n">Solde €</th>${foreignHead}<th>Description</th><th>Sous-cat.</th><th></th></tr>
-  ${tr.map(t => txRow(t, foreign, a.id)).join('')}</table></div><div class="mut">${tr.length} dernières écritures</div></div>
+  <div class="row" style="align-items:start"><div style="flex:3;min-width:520px">${dataTable(txColumns(foreign, sym(a.currency)), tr, t => txRow(t, foreign, a.id), {noun: 'écritures (les plus récentes)'})}</div>
   ${hasDep ? depositsPanel(info, a, cur) : ''}</div>`;
   EDIT = null;
 }
