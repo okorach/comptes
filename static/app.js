@@ -14,7 +14,7 @@ async function api(path, method = 'GET', body){
 let META = null;
 const meta = async () => {
   META = META || await api('meta');
-  MASTER = /^[A-Z]{3}$/.exec(String(META.master_currency))?.[0] ?? 'EUR';  // a currency code, nothing else
+  MASTER = String(META.master_currency).match(/^[A-Z]{3}$/g)?.[0] ?? 'EUR';  // a currency code, nothing else
   return META;
 };
 const enc = encodeURIComponent;
