@@ -141,7 +141,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def export_csv(self, con, a):
         acc = a["id"]
-        tr = con.execute("SELECT date,native_amount,native_balance,description,subcategory FROM transactions "
+        tr = con.execute("SELECT date,native_amount,native_balance,description,subcategory,fx_currency,fx_amount FROM transactions "
                          "WHERE account=? ORDER BY date,id", (acc,)).fetchall()
         dep = con.execute("SELECT date,native_amount FROM deposits WHERE account=? ORDER BY date", (acc,)).fetchall()
         buf = io.StringIO(); w = csv.writer(buf, lineterminator="\n")
@@ -150,7 +150,7 @@ class Handler(BaseHTTPRequestHandler):
                 f"Currency={a['currency']}", f"Type={a['type']}", f"TaxRate={a['tax']}", f"NbrTransactions={len(tr)}"]
         if dep: meta.append(f"NbrDeposits={len(dep)}")
         w.writerow(meta)
-        for r in tr: w.writerow([r[0], r[1], r[2], r[3], r[4]])
+        for r in tr: w.writerow(list(r))  # date, amount and balance in the account currency, description, subcategory, original currency and amount
         for r in dep: w.writerow([r[0], r[1]])
         name = re.sub(r"[^\w.-]+", "_", acc) + ".csv"
         return (buf.getvalue().encode("utf-8"), "text/csv; charset=utf-8",

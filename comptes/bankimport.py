@@ -193,8 +193,10 @@ def parse_generic(rows):
     n = int(meta.get("NbrTransactions", len(rows) - 1))
     out = []
     for r in rows[1:1 + n]:
-        out.append({"date": to_date(_g(r, 0)), "amount": to_amount(_g(r, 1)),
-                    "description": str(_g(r, 3)), "subcategory": str(_g(r, 4)) or None})
+        p = {"date": to_date(_g(r, 0)), "amount": to_amount(_g(r, 1)), "description": str(_g(r, 3)), "subcategory": str(_g(r, 4)) or None}
+        if str(_g(r, 5)).strip() and str(_g(r, 6)).strip():  # original currency and amount (columns added to the export for transactions in another currency)
+            p["fx_currency"], p["fx_amount"] = str(_g(r, 5)).strip().upper(), to_amount(_g(r, 6))
+        out.append(p)
     return out
 
 
@@ -213,8 +215,8 @@ def split_new(con, account_id, parsed):
 
 def commit_new(con, account_id, new):
     for p in new:
-        con.execute("INSERT INTO transactions(account,date,native_amount,description,subcategory) VALUES(?,?,?,?,?)",
-                    (account_id, p["date"], p["amount"], p["description"], p.get("subcategory")))
+        con.execute("INSERT INTO transactions(account,date,native_amount,description,subcategory,fx_currency,fx_amount) VALUES(?,?,?,?,?,?,?)",
+                    (account_id, p["date"], p["amount"], p["description"], p.get("subcategory"), p.get("fx_currency"), p.get("fx_amount")))
     from . import calc
     calc.recompute_account(con, account_id)
     con.commit()

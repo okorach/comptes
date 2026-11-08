@@ -1,11 +1,13 @@
 """Accounts take transactions in a currency other than their own: both amounts are kept, the balance is in the account currency"""
+import csv
+import io
 import os
 import sqlite3
 import tempfile
 import unittest
 
 from helpers import make_db
-from comptes import calc, db, ops
+from comptes import bankimport, calc, db, ops
 
 
 class MultiCurrencyTest(unittest.TestCase):
@@ -93,3 +95,15 @@ class MultiCurrencyTest(unittest.TestCase):
             con.close()
         finally:
             os.remove(path)
+
+    def test_generic_import_reads_the_original_amount(self):
+        """Rows of the CSV export (original currency and amount in the last 2 columns) are imported with them"""
+        text = "ExportDate=2024-01-01,NbrTransactions=2\n2022-03-01,100,100,Salary,\n2022-03-02,-160,-60,US,,USD,-100\n"
+        parsed = bankimport.parse_generic(list(csv.reader(io.StringIO(text))))
+        self.assertNotIn("fx_currency", parsed[0])
+        self.assertEqual((parsed[1]["fx_currency"], parsed[1]["fx_amount"], parsed[1]["amount"]), ("USD", -100.0, -160.0))
+        new, _ = bankimport.split_new(self.con, "Suisse", parsed)
+        bankimport.commit_new(self.con, "Suisse", new)
+        first, second = self.rows()
+        self.assertEqual((first["fx_currency"], second["fx_currency"], second["fx_amount"], second["fx_auto"]), (None, "USD", -100.0, 0))
+        self.assertEqual((second["native_amount"], second["native_balance"]), (-160.0, -60.0))
