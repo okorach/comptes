@@ -44,6 +44,7 @@ def needed_currencies(con: sqlite3.Connection) -> dict[str, str]:
     oldest: dict[str, str] = {}
 
     def note(cur: str | None, date: str | None) -> None:
+        """Keeps the oldest date of the currency"""
         if cur and date and cur != "EUR" and date[:10] < oldest.get(cur, "9999"):
             oldest[cur] = date[:10]
 
@@ -133,6 +134,7 @@ def describe(result: dict) -> str:
 
 
 def _update(db_path: str) -> None:
+    """Body of the background thread: update and report on the console, whatever happens"""
     con = connect(db_path)
     try:
         print(describe(refresh(con)), flush=True)

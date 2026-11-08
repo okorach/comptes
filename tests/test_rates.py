@@ -139,12 +139,13 @@ class FetchTest(unittest.TestCase):
         self.assertIn("base=EUR&symbols=CHF", url)
 
     def test_http_errors_are_service_errors_but_network_errors_are_not(self):
+        start, end = d("2024-01-08"), d("2024-01-10")
         with mock.patch("urllib.request.urlopen", side_effect=urllib.error.HTTPError("u", 404, "not found", {}, None)):
             with self.assertRaises(rates.RatesError):
-                rates.fetch_rates("XXX", d("2024-01-08"), d("2024-01-10"))
+                rates.fetch_rates("XXX", start, end)
         with mock.patch("urllib.request.urlopen", side_effect=urllib.error.URLError("down")):
             with self.assertRaises(OSError):
-                rates.fetch_rates("CHF", d("2024-01-08"), d("2024-01-10"))
+                rates.fetch_rates("CHF", start, end)
 
 
 class StartupTest(UsdDatabaseCase):
