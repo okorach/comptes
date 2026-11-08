@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS interests(
 NATIVE_INTEREST_COLUMNS = ("n1", "n3", "n5", "n8", "n_all")
 # Columns introduced after the first version of the database: table -> {column: definition}
 ADDED_COLUMNS = {
-    "interests": {c: "REAL" for c in NATIVE_INTEREST_COLUMNS},
+    "interests": dict.fromkeys(NATIVE_INTEREST_COLUMNS, "REAL"),
     "transactions": {"fx_currency": "TEXT", "fx_amount": "REAL", "fx_auto": "INTEGER DEFAULT 0"},
 }
 

@@ -1,4 +1,5 @@
 import datetime as dt
+import sqlite3
 from bisect import bisect_right
 
 
@@ -71,7 +72,7 @@ class Fx:
         return rs[i - 1] if i else rs[0]
 
 
-def flow_amount(r, fx, rate):
+def flow_amount(r: sqlite3.Row, fx: "Fx", rate: float) -> float:
     """Amount of a flow transaction in the currency of the account (`rate` = rate of that currency on the date of the transaction).
     A transaction in another currency without an entered amount is converted from its original amount."""
     if r["fx_auto"] and r["fx_currency"] and r["fx_amount"] is not None:

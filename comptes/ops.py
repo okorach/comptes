@@ -1,4 +1,6 @@
 """Write operations: transactions, deposits, accounts."""
+import sqlite3
+
 from . import calc
 
 
@@ -8,7 +10,7 @@ def _f(x):
     return float(str(x).replace(",", ".").replace(" ", ""))
 
 
-def _original_amount(con, acc, d):
+def _original_amount(con: sqlite3.Connection, acc: str, d: dict) -> tuple[str | None, float | None, int]:
     """(fx_currency, fx_amount, fx_auto) of a transaction made in a currency other than the one of the account.
     Only flow / static accounts take them; without an entered amount in the currency of the account, it is converted."""
     cur = (d.get("fx_currency") or "").strip().upper() or None

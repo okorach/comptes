@@ -157,6 +157,13 @@ const txColumns = (foreign, cur, hasFx) => [
   ...(hasFx ? [{label: "Montant d'origine", num: true, value: t => t.fx_amount}, {label: "Devise d'origine", value: t => t.fx_currency}] : []),
   {label: 'Description', value: t => t.description}, {label: 'Sous-cat.', value: t => t.subcategory}, {label: '', sort: false, filter: false, value: () => null},
 ];
+/* Input fields of an entry, depending on the way the balance of the account is kept */
+function modeFields(a, m, cur){
+  if (a.mode === 'snapshot') return `<label>Solde (${cur})<input id="f_bal" size="12"></label>`;
+  if (a.mode === 'shares') return '<label>Nb de titres<input id="f_qty" size="10"></label><label>Prix unitaire<input id="f_px" size="10"></label>';
+  const title = "Vide : converti depuis le montant d'origine";  // flow and static accounts take transactions in other currencies too
+  return `<label>Montant (${cur})<input id="f_amt" size="12" placeholder="auto" title="${title}"></label>${fxFields(a, m)}`;
+}
 /* Optional original amount, for a transaction in a currency other than the one of the account */
 const fxFields = (a, m) => {
   const opts = [...new Set(m.currencies)].filter(c => c !== a.currency).map(c => `<option>${esc(c)}</option>`).join('');
@@ -167,13 +174,10 @@ async function account(id, msg = ''){
   const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions?limit=500'), meta()]);
   const a = info.account, cur = esc(sym(a.currency)), foreign = a.currency !== 'EUR';
   const hasDep = !['Courant', 'Autres', null].includes(a.type);
-  const fx = a.mode === 'flow' || a.mode === 'static';  // these accounts take transactions in a currency other than their own
   const bank = a.bank || '';
   const hasFx = tr.some(t => t.fx_currency);
   const subOpts = '<option value=""></option>' + m.categories.map(c => `<option>${esc(c.subcategory)}</option>`).join('');
-  const modeFields = a.mode === 'snapshot' ? `<label>Solde (${cur})<input id="f_bal" size="12"></label>`
-    : a.mode === 'shares' ? `<label>Nb de titres<input id="f_qty" size="10"></label><label>Prix unitaire<input id="f_px" size="10"></label>`
-    : `<label>Montant (${cur})<input id="f_amt" size="12" placeholder="${fx ? 'auto' : ''}" title="${fx ? "Vide : converti depuis le montant d'origine" : ''}"></label>${fx ? fxFields(a, m) : ''}`;
+  const fields = modeFields(a, m, cur);
   const importBanks = ['BoursoBank', 'ING', 'LCL', 'UBS', 'Revolut', 'Yuh', 'generic'];
   $('#main').innerHTML = `<h2>${esc(a.id)} <span class="mut" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
   <div class="row"><button onclick="location.hash='#/'">← Retour</button>
@@ -181,7 +185,7 @@ async function account(id, msg = ''){
   <a href="/api/account/${enc(a.id)}/export.csv"><button>Exporter CSV</button></a>
   ${a.mode === 'flow' || a.mode === 'static' ? `<label style="flex-direction:row;align-items:center;gap:6px">Importer <select id="imp_bank">${importBanks.map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('')}</select><input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : ''}</div>
   <div id="imp"></div><div class="ok">${esc(msg)}</div>
-  <div class="card"><b id="form_title">Nouvelle écriture</b><div class="row"><label>Date<input type="date" id="f_date" value="${new Date().toISOString().slice(0, 10)}"></label>${modeFields}
+  <div class="card"><b id="form_title">Nouvelle écriture</b><div class="row"><label>Date<input type="date" id="f_date" value="${new Date().toISOString().slice(0, 10)}"></label>${fields}
   <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
