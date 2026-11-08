@@ -2,25 +2,12 @@
 import csv
 import io
 import os
-import sqlite3
-import tempfile
-import unittest
 
-from helpers import make_db
+from helpers import UsdDatabaseCase, make_legacy_database
 from comptes import bankimport, calc, db, ops
 
 
-class MultiCurrencyTest(unittest.TestCase):
-    def setUp(self):
-        self.con, self.path = make_db()
-        # CHF: 2 per EUR from 2021, USD: 1.25 per EUR
-        self.con.execute("INSERT INTO fx_rates VALUES('USD','2020-01-01',1.25)")
-        self.con.commit()
-
-    def tearDown(self):
-        self.con.close()
-        os.remove(self.path)
-
+class MultiCurrencyTest(UsdDatabaseCase):
     def rows(self, account="Suisse"):
         return [dict(r) for r in self.con.execute("SELECT * FROM transactions WHERE account=? ORDER BY date,id", (account,))]
 
@@ -32,8 +19,8 @@ class MultiCurrencyTest(unittest.TestCase):
         self.assertEqual((second["fx_currency"], second["fx_amount"], second["fx_auto"]), ("USD", -100.0, 1))
         self.assertAlmostEqual(second["native_amount"], -160.0)
         self.assertAlmostEqual(second["native_balance"], 840.0)  # balance in CHF
-        self.assertAlmostEqual(second["amount_eur"], -80.0)
-        self.assertAlmostEqual(second["balance_eur"], 420.0)
+        self.assertAlmostEqual(second["amount_main"], -80.0)
+        self.assertAlmostEqual(second["balance_main"], 420.0)
         self.assertIsNone(first["fx_currency"])
 
     def test_entered_amount_is_kept(self):
@@ -47,7 +34,7 @@ class MultiCurrencyTest(unittest.TestCase):
         ops.add_transaction(self.con, "Courant", {"date": "2022-02-01", "fx_currency": "CHF", "fx_amount": "-20"})
         row = self.rows("Courant")[0]
         self.assertAlmostEqual(row["native_amount"], -10.0)
-        self.assertAlmostEqual(row["balance_eur"], -10.0)
+        self.assertAlmostEqual(row["balance_main"], -10.0)
 
     def test_converted_amount_follows_the_exchange_rates_but_entered_amount_does_not(self):
         ops.add_transaction(self.con, "Suisse", {"date": "2022-02-01", "fx_currency": "USD", "fx_amount": "-100"})
@@ -79,16 +66,8 @@ class MultiCurrencyTest(unittest.TestCase):
         self.assertEqual(self.con.execute("SELECT COUNT(*) FROM transactions").fetchone()[0], 0)
 
     def test_existing_databases_get_the_new_columns(self):
-        fd, path = tempfile.mkstemp(suffix=".db")
-        os.close(fd)
+        path = make_legacy_database()
         try:
-            old = sqlite3.connect(path)
-            old.execute("CREATE TABLE transactions(id INTEGER PRIMARY KEY AUTOINCREMENT, account TEXT NOT NULL, date TEXT NOT NULL, "
-                        "amount_eur REAL, balance_eur REAL, native_amount REAL, native_balance REAL, description TEXT, subcategory TEXT, "
-                        "in_budget REAL, qty REAL, price REAL)")
-            old.execute("INSERT INTO transactions(account,date,native_amount) VALUES('A','2024-01-01',5)")
-            old.commit()
-            old.close()
             con = db.connect(path)
             row = con.execute("SELECT * FROM transactions").fetchone()
             self.assertEqual((row["native_amount"], row["fx_currency"], row["fx_amount"], row["fx_auto"]), (5.0, None, None, 0))

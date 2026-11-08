@@ -23,7 +23,7 @@ def spread_rows(con, until=None):
     """Yield (date_iso, account, category, subcategory, spread_amount, raw_amount, description)."""
     until = until or dt.date.today().isoformat()
     cats = {r[0]: r[1] for r in con.execute("SELECT subcategory,category FROM categories")}
-    q = ("SELECT t.date,t.account,t.subcategory,t.amount_eur,t.in_budget,t.description FROM transactions t "
+    q = ("SELECT t.date,t.account,t.subcategory,t.amount_main,t.in_budget,t.description FROM transactions t "
          "JOIN accounts a ON a.id=t.account WHERE a.in_budget=1")
     for d, acc, sub, amt, b, desc in con.execute(q):
         if amt is None or (b is not None and b == 0):

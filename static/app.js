@@ -1,6 +1,7 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const num = (v, cur = '€') => v == null ? '' : v.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + cur;
+let MASTER = 'EUR';  // master currency of the application: totals, balances and yields of all the accounts are in it
+const num = (v, cur = sym(MASTER)) => v == null ? '' : v.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + cur;
 const pct = v => v == null ? '–' : (v * 100).toLocaleString('fr-FR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + ' %';
 const cls = v => v < 0 ? 'neg' : '';
 const sym = c => ({EUR: '€', CHF: 'CHF', USD: '$', GBP: '£'}[c] || c);
@@ -11,7 +12,11 @@ async function api(path, method = 'GET', body){
   return j;
 }
 let META = null;
-const meta = async () => META || (META = await api('meta'));
+const meta = async () => {
+  META = META || await api('meta');
+  MASTER = META.master_currency || 'EUR';
+  return META;
+};
 const enc = encodeURIComponent;
 // Escapes a value for use as a single-quoted JS string inside a double-quoted HTML attribute (onclick="f('...')")
 const jsq = s => esc(String(s).replaceAll('\\', String.raw`\\`).replaceAll("'", String.raw`\'`).replaceAll('\n', String.raw`\n`).replaceAll('\r', String.raw`\r`));
@@ -22,6 +27,7 @@ async function route(){
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.dataset.r === (name === 'account' ? '' : name)));
   $('#main').innerHTML = 'Chargement…';
   try {
+    await meta();
     if (name === 'spending') await spending();
     else if (name === 'interests') await interests();
     else if (name === 'admin') await admin();
@@ -43,28 +49,28 @@ function monthlySavings(totals, months = SAVINGS_MONTHS){
 /* ------------------------------------------------------------------ home */
 async function home(){
   const open = $('#openOnly') ? $('#openOnly').checked : true;
-  const [acc, nw] = await Promise.all([api('accounts'), api('networth?open=' + (open ? 1 : 0))]);
+  const [acc, nw] = await Promise.all([api('accounts'), api('networth?open=' + (open ? 1 : 0)), meta()]);
   const shown = acc.filter(a => !open || a.status === 'Open');
-  const total = shown.reduce((s, a) => s + a.balance_eur, 0);
-  const sumBy = f => { const o = {}; shown.forEach(a => { const k = f(a) || '–'; o[k] = (o[k] || 0) + a.balance_eur; }); return Object.entries(o).sort((a, b) => b[1] - a[1]); };
+  const total = shown.reduce((s, a) => s + a.balance_main, 0);
+  const sumBy = f => { const o = {}; shown.forEach(a => { const k = f(a) || '–'; o[k] = (o[k] || 0) + a.balance_main; }); return Object.entries(o).sort((a, b) => b[1] - a[1]); };
   const tbl = rows => `<table>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="n ${cls(v)}">${num(v)}</td></tr>`).join('')}</table>`;
-  const byYear = {}; shown.forEach(a => { const k = a.availability || 0; byYear[k] = (byYear[k] || 0) + a.balance_eur; });
+  const byYear = {}; shown.forEach(a => { const k = a.availability || 0; byYear[k] = (byYear[k] || 0) + a.balance_main; });
   $('#main').innerHTML = `<div class="mut">Patrimoine</div><div class="big">${num(total)}</div>
   <label><input type="checkbox" id="openOnly" ${open ? 'checked' : ''} onchange="home()"> comptes ouverts seulement</label>
   ${drawChart(nw.map(p => p.month), [
-    {name: `Épargne mensuelle (moy. ${SAVINGS_MONTHS} mois)`, color: 'var(--pos-light)', type: 'bar', axis: 'right', unit: '€/mois', values: monthlySavings(nw.map(p => p.total))},
-    {name: 'Patrimoine', color: 'var(--acc)', type: 'line', values: nw.map(p => p.total)}], {xticks: 12})}
+    {name: `Épargne mensuelle (moy. ${SAVINGS_MONTHS} mois)`, color: 'var(--pos-light)', type: 'bar', axis: 'right', unit: sym(MASTER) + '/mois', values: monthlySavings(nw.map(p => p.total))},
+    {name: 'Patrimoine', color: 'var(--acc)', type: 'line', values: nw.map(p => p.total)}], {xticks: 12, unit: sym(MASTER)})}
   <div class="row" style="align-items:start"><div style="flex:1;min-width:260px"><h3>Par banque</h3>${tbl(sumBy(a => a.bank))}</div>
   <div style="flex:1;min-width:260px"><h3>Par année de disponibilité</h3>${tbl(Object.entries(byYear).sort((a, b) => a[0] - b[0]).map(([k, v]) => [k === '0' ? 'Immédiate' : k, v]))}</div>
   <div style="flex:1;min-width:260px"><h3>Par type</h3>${tbl(sumBy(a => a.type))}</div></div>
-  <h3>Comptes</h3>${dataTable(HOME_COLUMNS, shown.sort((a, b) => b.balance_eur - a.balance_eur), homeRow, {noun: 'comptes'})}`;
+  <h3>Comptes</h3>${dataTable(homeColumns(), shown.sort((a, b) => b.balance_main - a.balance_main), homeRow, {noun: 'comptes'})}`;
 }
-const HOME_COLUMNS = [
+const homeColumns = () => [
   {label: 'Compte', value: a => a.id}, {label: 'Type', value: a => a.type}, {label: 'Banque', value: a => a.bank},
   {label: 'Dispo.', value: a => a.availability || null}, {label: 'Dernière date', value: a => a.last_date},
-  {label: 'Solde (devise)', num: true, value: a => a.currency === 'EUR' ? null : a.balance_native}, {label: 'Solde €', num: true, value: a => a.balance_eur},
+  {label: 'Solde (devise)', num: true, value: a => a.currency === MASTER ? null : a.balance_native}, {label: 'Solde ' + sym(MASTER), num: true, value: a => a.balance_main},
 ];
-const homeRow = a => `<tr class="click" onclick="location.hash='#/account/${enc(a.id)}'"><td>${esc(a.id)}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td><td>${a.availability || ''}</td><td>${a.last_date || ''}</td><td class="n mut">${a.currency === 'EUR' ? '' : num(a.balance_native, sym(a.currency))}</td><td class="n ${cls(a.balance_eur)}">${num(a.balance_eur)}</td></tr>`;
+const homeRow = a => `<tr class="click" onclick="location.hash='#/account/${enc(a.id)}'"><td>${esc(a.id)}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td><td>${a.availability || ''}</td><td>${a.last_date || ''}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td class="n ${cls(a.balance_main)}">${num(a.balance_main)}</td></tr>`;
 
 /* ------------------------------------------------------------------ spending */
 let SP = {group: 'month', months: 36, exclude: null};
@@ -83,7 +89,7 @@ async function spending(){
   <label>Période<select onchange="SP.months=+this.value;spending()">${[[12, '12 mois'], [24, '24 mois'], [36, '3 ans'], [60, '5 ans'], [120, '10 ans'], [600, 'Tout']].map(([v, l]) => `<option value="${v}" ${SP.months === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
   <div class="chips"><span class="mut">Catégories incluses :</span> ${chips}</div>
   <div class="mut" style="font-size:12px;margin:4px 0">Dépenses = −montant sur les comptes « en budget ». Les écritures avec un nombre N (&gt;1) dans « In Budget » sont lissées sur N mois.</div>
-  ${drawChart(periods, [{name: 'Dépenses lissées', color: 'var(--acc)', type: 'bar', values: s.map(x => x.spread)}].concat(SP.group === 'month' ? [{name: 'Moyenne 12 mois', color: 'var(--neg)', type: 'line', values: s.map(x => x.avg12)}] : []), {xticks: 12})}
+  ${drawChart(periods, [{name: 'Dépenses lissées', color: 'var(--acc)', type: 'bar', values: s.map(x => x.spread)}].concat(SP.group === 'month' ? [{name: 'Moyenne 12 mois', color: 'var(--neg)', type: 'line', values: s.map(x => x.avg12)}] : []), {xticks: 12, unit: sym(MASTER)})}
   <div class="row" style="align-items:start"><div style="flex:1;min-width:300px"><h3>Par catégorie</h3><table><tr><th>Catégorie</th><th class="n">Total</th><th class="n">%</th></tr>
   ${r.categories.map(c => `<tr><td>${esc(c.category)}</td><td class="n ${cls(-c.total)}">${num(c.total)}</td><td class="n">${pct(c.pct)}</td></tr>`).join('')}</table></div>
   <div style="flex:1;min-width:300px"><h3>Par période</h3><div class="scroll" style="max-height:420px;overflow-y:auto"><table><tr><th>Période</th><th class="n">Lissées</th><th class="n">Brutes</th>${SP.group === 'month' ? '<th class="n">Moy. 12 mois</th>' : ''}</tr>
@@ -114,14 +120,14 @@ function txRow(t, foreign, aid, hasFx = false){
   const native = foreign ? `<td class="n mut">${num(t.native_amount, '')}</td><td class="n mut">${num(t.native_balance, '')}</td>` : '';
   const origin = hasFx ? `<td class="n mut">${num(t.fx_amount, '')}</td><td>${esc(t.fx_currency)}</td>` : '';
   const budget = t.in_budget ? ` <span class="mut">(${esc(t.in_budget)})</span>` : '';
-  return `<tr><td>${esc(t.date)}</td><td class="n ${cls(t.amount_eur)}">${num(t.amount_eur)}</td><td class="n">${num(t.balance_eur)}</td>${native}${origin}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
+  return `<tr><td>${esc(t.date)}</td><td class="n ${cls(t.amount_main)}">${num(t.amount_main)}</td><td class="n">${num(t.balance_main)}</td>${native}${origin}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
   <td><button class="link" onclick="editTx(${esc(JSON.stringify(t))})">modifier</button><button class="link" onclick="delTx(${Number(t.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
 }
 const NATIVE_KEY = {y1: 'n1', y3: 'n3', y5: 'n5', y8: 'n8', y_all: 'n_all'};
 const INTEREST_PERIODS = [['1 an', 'y1'], ['3 ans', 'y3'], ['5 ans', 'y5'], ['8 ans', 'y8'], ['Depuis le début', 'y_all']];
 /* Yield in EUR, followed (in small) by the yield in the currency of the account, without the exchange rate effect */
 const nativeRateHtml = (native, currency) => {
-  if (native == null || !currency || currency === 'EUR') return '';
+  if (native == null || !currency || currency === MASTER) return '';
   const neg = native < 0 ? 'neg' : '';
   return ` <small class="mut ${neg}" title="Rendement en ${esc(currency)}, hors effet de change">${pct(native)} ${esc(currency)}</small>`;
 };
@@ -143,7 +149,7 @@ function interestsTable(interests, currency){
   return `<table>${rows}</table>`;
 }
 function depositRow(d, aid){
-  return `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_eur)}</td><td><button class="link" onclick="delDep(${Number(d.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
+  return `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_main)}</td><td><button class="link" onclick="delDep(${Number(d.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
 }
 function depositsPanel(info, a, cur){
   return `<div style="flex:1;min-width:260px"><h3>Rendements nets</h3>${interestsTable(info.interests, a.currency)}
@@ -152,7 +158,7 @@ function depositsPanel(info, a, cur){
   <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;
 }
 const txColumns = (foreign, cur, hasFx) => [
-  {label: 'Date', value: t => t.date}, {label: 'Montant €', num: true, value: t => t.amount_eur}, {label: 'Solde €', num: true, value: t => t.balance_eur},
+  {label: 'Date', value: t => t.date}, {label: 'Montant ' + sym(MASTER), num: true, value: t => t.amount_main}, {label: 'Solde ' + sym(MASTER), num: true, value: t => t.balance_main},
   ...(foreign ? [{label: `Montant ${cur}`, num: true, value: t => t.native_amount}, {label: `Solde ${cur}`, num: true, value: t => t.native_balance}] : []),
   ...(hasFx ? [{label: "Montant d'origine", num: true, value: t => t.fx_amount}, {label: "Devise d'origine", value: t => t.fx_currency}] : []),
   {label: 'Description', value: t => t.description}, {label: 'Sous-cat.', value: t => t.subcategory}, {label: '', sort: false, filter: false, value: () => null},
@@ -172,7 +178,7 @@ const fxFields = (a, m) => {
 let EDIT = null;
 async function account(id, msg = ''){
   const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions?limit=500'), meta()]);
-  const a = info.account, cur = esc(sym(a.currency)), foreign = a.currency !== 'EUR';
+  const a = info.account, cur = esc(sym(a.currency)), foreign = a.currency !== MASTER;
   const hasDep = !['Courant', 'Autres', null].includes(a.type);
   const bank = a.bank || '';
   const hasFx = tr.some(t => t.fx_currency);
@@ -248,11 +254,22 @@ async function admin(msg = ''){
   <label style="flex-direction:row;align-items:center"><input type="checkbox" id="n_bud"> en budget</label>
   <button class="primary" onclick="createAcc()">Créer</button></div><div id="n_err" class="err"></div>
   <div class="mut" style="font-size:12px">Compte de type « Courant » : saisie des montants (solde cumulé). Autres types : saisie du solde (le montant est la différence). Pour des titres cotés, créez le compte puis choisissez le mode « shares » dans la base si besoin.</div></div>
-  <div class="card"><b>Taux de change</b> <span class="mut">(unités de devise pour 1 €)</span><div class="row">
+  <div class="card"><b>Devise principale</b> <span class="mut">(totaux, soldes et rendements de tous les comptes)</span><div class="row">
+  <label>Devise<select id="m_cur">${[...new Set(m.currencies)].map(c => `<option ${c === m.master_currency ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+  <button onclick="setMaster()">Appliquer</button></div><div id="m_err" class="err"></div>
+  <div class="mut" style="font-size:12px">Tous les montants, soldes et rendements sont recalculés ; la devise doit avoir des taux de change (l'euro n'en a pas besoin).</div></div>
+  <div class="card"><b>Taux de change</b> <span class="mut">(unités de devise pour 1 € ; l'euro sert de pivot)</span><div class="row">
   <label>Devise<select id="x_cur" onchange="fxList()">${m.currencies.filter(c => c !== 'EUR').map(c => `<option>${c}</option>`).join('')}</select></label>
   <label>Date<input type="date" id="x_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Taux<input id="x_rate" size="8"></label><button onclick="addFx()">Ajouter</button></div>
   <div id="fxl"></div></div>`;
   await fxList();
+}
+async function setMaster(){
+  try {
+    await api('master_currency', 'POST', {currency: $('#m_cur').value});
+    META = null;
+    await admin('Devise principale modifiée : tous les montants ont été recalculés');
+  } catch (e) { $('#m_err').textContent = e.message; }
 }
 async function fxList(){
   const cur = $('#x_cur').value, rows = await api('fx?currency=' + cur);

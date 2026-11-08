@@ -53,7 +53,7 @@ class DuplicateTest(unittest.TestCase):
         self.assertEqual((len(new), len(dup)), (2, 0))
         bi.commit_new(self.con, "Courant", new)
         summ = {a["id"]: a for a in calc.account_summaries(self.con, "2024-12-31")}
-        self.assertEqual(summ["Courant"]["balance_eur"], -12.0)
+        self.assertEqual(summ["Courant"]["balance_main"], -12.0)
         # same file again: everything is a duplicate; a repeated line counts as one more new row
         new, dup = bi.split_new(self.con, "Courant", parsed + [parsed[0]])
         self.assertEqual((len(new), len(dup)), (1, 2))

@@ -73,6 +73,7 @@ class Handler(BaseHTTPRequestHandler):
             return {"categories": [dict(r) for r in con.execute("SELECT * FROM categories ORDER BY category,subcategory")],
                     "types": [dict(r) for r in con.execute("SELECT * FROM account_types ORDER BY name")],
                     "currencies": [r[0] for r in con.execute("SELECT DISTINCT currency FROM fx_rates")] + ["EUR"],
+                    "master_currency": calc.master_currency(con),
                     "banks": [r[0] for r in con.execute("SELECT DISTINCT bank FROM accounts WHERE bank IS NOT NULL ORDER BY 1")]}
         if path == "spending":
             ex = tuple(x for x in q.get("exclude", ",".join(budget.DEFAULT_EXCLUDE)).split(",") if x)
@@ -89,6 +90,8 @@ class Handler(BaseHTTPRequestHandler):
             if d.get("account"):
                 interest.recalc(con, d["account"]); con.commit(); return {"ok": True, "n": 1}
             return {"ok": True, "n": interest.recalc_all(con, force=bool(d.get("force")))}
+        if path == "master_currency" and m == "POST":
+            ops.set_master_currency(con, self._body().get("currency")); return {"ok": True}
         if path == "fx":
             if m == "POST":
                 d = self._body(); ops.add_fx(con, d["currency"], d["date"], d["rate"]); return {"ok": True}
@@ -119,7 +122,7 @@ class Handler(BaseHTTPRequestHandler):
                 if m == "POST":
                     return {"id": ops.add_transaction(con, acc, self._body())}
                 rows = con.execute(
-                    "SELECT id,date,amount_eur,balance_eur,native_amount,native_balance,description,subcategory,in_budget,qty,price,"
+                    "SELECT id,date,amount_main,balance_main,native_amount,native_balance,description,subcategory,in_budget,qty,price,"
                     "fx_currency,fx_amount,fx_auto "
                     "FROM transactions WHERE account=? ORDER BY date DESC, id DESC LIMIT ?",
                     (acc, int(q.get("limit", 500)))).fetchall()

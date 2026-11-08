@@ -1,7 +1,7 @@
 """Write operations: transactions, deposits, accounts."""
 import sqlite3
 
-from . import calc
+from . import calc, interest
 
 
 def _f(x):
@@ -70,8 +70,8 @@ def delete_transaction(con, tid):
 def add_deposit(con, acc, date, native_amount):
     cur = con.execute("SELECT currency FROM accounts WHERE id=?", (acc,)).fetchone()["currency"]
     amt = _f(native_amount)
-    eur = amt / calc.Fx(con).rate(cur, date)
-    con.execute("INSERT INTO deposits(account,date,amount_eur,native_amount) VALUES(?,?,?,?)", (acc, date, eur, amt))
+    main = amt / calc.Fx(con).rate(cur, date)
+    con.execute("INSERT INTO deposits(account,date,amount_main,native_amount) VALUES(?,?,?,?)", (acc, date, main, amt))
     con.commit()
 
 
@@ -86,7 +86,7 @@ def create_account(con, d):
         "INSERT INTO accounts(id,number,bank,availability,status,currency,type,in_budget,tax,website,mode)"
         " VALUES(?,?,?,?,?,?,?,?,?,?,?)",
         (d["id"], d.get("number"), d.get("bank"), int(d.get("availability") or 0), "Open",
-         d.get("currency") or "EUR", d.get("type") or "Courant", 1 if d.get("in_budget") else 0,
+         d.get("currency") or calc.master_currency(con), d.get("type") or "Courant", 1 if d.get("in_budget") else 0,
          _f(d.get("tax")) or 0.0, d.get("website"), mode))
     con.commit()
 
@@ -98,4 +98,31 @@ def set_status(con, acc, status):
 
 def add_fx(con, cur, date, rate):
     con.execute("INSERT OR REPLACE INTO fx_rates VALUES(?,?,?)", (cur, date, float(rate)))
+    con.commit()
+
+
+def set_master_currency(con: sqlite3.Connection, currency: str) -> None:
+    """Changes the currency of the application: every amount, balance and yield expressed in it is recomputed.
+    EUR, or a currency with exchange rates, is required."""
+    cur = (currency or "").strip().upper()
+    if len(cur) != 3 or not cur.isalpha():
+        raise ValueError("devise invalide")
+    try:
+        # deposits imported without an amount in the currency of their account: keep it, expressed with the current master currency
+        old_fx = calc.Fx(con)
+        for d in con.execute("SELECT d.id,d.date,d.amount_main,a.currency FROM deposits d JOIN accounts a ON a.id=d.account "
+                             "WHERE d.native_amount IS NULL AND d.amount_main IS NOT NULL").fetchall():
+            con.execute("UPDATE deposits SET native_amount=? WHERE id=?", (d["amount_main"] * old_fx.rate(d["currency"], d["date"]), d["id"]))
+        con.execute("INSERT OR REPLACE INTO params VALUES('master_currency',?)", (cur,))
+        fx = calc.Fx(con)
+        fx.per_eur(cur, calc.today_iso())  # fails when there is no exchange rate for this currency
+        for (acc,) in con.execute("SELECT id FROM accounts").fetchall():
+            calc.recompute_account(con, acc, fx)
+        for d in con.execute("SELECT d.id,d.date,d.native_amount,a.currency FROM deposits d JOIN accounts a ON a.id=d.account").fetchall():
+            if d["native_amount"] is not None:
+                con.execute("UPDATE deposits SET amount_main=? WHERE id=?", (d["native_amount"] / fx.rate(d["currency"], d["date"]), d["id"]))
+        interest.recalc_all(con, force=True)
+    except Exception:
+        con.rollback()
+        raise
     con.commit()

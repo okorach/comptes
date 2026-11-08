@@ -51,9 +51,9 @@ class ServerTest(unittest.TestCase):
         acc = "/api/account/Courant"
         tid = self.call("POST", acc + "/transactions", {"date": "2024-02-01", "native_amount": "-10", "description": "T"})["id"]
         rows = self.call("GET", acc + "/transactions?limit=10")
-        self.assertEqual(rows[0]["balance_eur"], 90.0)
+        self.assertEqual(rows[0]["balance_main"], 90.0)
         self.call("PUT", f"/api/transaction/{tid}", {"date": "2024-02-01", "native_amount": "-20"})
-        self.assertEqual(self.call("GET", acc + "/transactions?limit=1")[0]["balance_eur"], 80.0)
+        self.assertEqual(self.call("GET", acc + "/transactions?limit=1")[0]["balance_main"], 80.0)
         self.call("DELETE", f"/api/transaction/{tid}")
         self.assertEqual(len(self.call("GET", acc + "/transactions?limit=10")), 1)
 
@@ -77,6 +77,16 @@ class ServerTest(unittest.TestCase):
         # date, amount in CHF, balance (depends on the other tests), description, subcategory, original currency, original amount
         rows = [line.split(",") for line in lines[1:] if "2030-03" in line]
         self.assertEqual([r[:2] + r[3:] for r in rows], [["2030-03-01", "1000.0", "CHF", "", "", ""], ["2030-03-02", "-160.0", "US", "", "USD", "-100.0"]])
+
+    def test_master_currency(self):
+        self.assertEqual(self.call("GET", "/api/meta")["master_currency"], "EUR")
+        self.assertEqual(self.call("POST", "/api/master_currency", {"currency": "JPY"})["HTTP"], 400)  # no exchange rate
+        self.assertEqual(self.call("POST", "/api/master_currency", {"currency": "CHF"}), {"ok": True})
+        try:
+            self.assertEqual(self.call("GET", "/api/meta")["master_currency"], "CHF")
+        finally:
+            self.call("POST", "/api/master_currency", {"currency": "EUR"})
+        self.assertEqual(self.call("GET", "/api/meta")["master_currency"], "EUR")
 
     def test_import_preview(self):
         csv = "d;a;b;c\n2024-03-01;x;SHOP;-3,10\n".encode()
