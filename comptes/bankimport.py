@@ -194,7 +194,8 @@ def parse_generic(rows):
     out = []
     for r in rows[1:1 + n]:
         p = {"date": to_date(_g(r, 0)), "amount": to_amount(_g(r, 1)), "description": str(_g(r, 3)), "subcategory": str(_g(r, 4)) or None}
-        if str(_g(r, 5)).strip() and str(_g(r, 6)).strip():  # original currency and amount (columns added to the export for transactions in another currency)
+        # original currency and amount: columns of the export for the transactions in a currency other than the one of the account
+        if str(_g(r, 5)).strip() and str(_g(r, 6)).strip():
             p["fx_currency"], p["fx_amount"] = str(_g(r, 5)).strip().upper(), to_amount(_g(r, 6))
         out.append(p)
     return out
