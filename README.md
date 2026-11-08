@@ -17,13 +17,14 @@ The database is a single SQLite file (`comptes.db`, git-ignored). Back it up lik
 
 | Workbook | App |
 |---|---|
-| Account sheets (flow / balance / shares accounts, multi-currency) | Account page: add / edit / delete entries, balances recomputed automatically |
+| Account sheets (flow / balance / shares accounts, multi-currency) | Account page: add / edit / delete entries, balances recomputed automatically. Entries of a flow account can be in another currency than the account: the original amount is kept next to the amount in the account currency (entered, or converted at the exchange rate of the day), and the balance is in the account currency |
 | `Solde`, `Solde par compte` | Overview: net worth over time, totals by bank / availability year / type |
 | `Budget`, `Stats`, `Ventilation`, `Etude` pivots, `GenBudget` | **Dépenses** page (month / quarter / year, category matrix, 12-month average, spreading over N months) |
 | `Interests` sheet + Goal Seek | **Rendements** page, analytic solver (no Excel needed) |
 | `BankImport*.bas` (BoursoBank, LCL, ING, UBS, Revolut, Yuh, generic CSV) | Import box on the account page, with preview and **duplicate detection** |
 | Export / Import CSV with metadata row | `Exporter CSV` / import « generic » |
 | Account creation form, exchange-rate tables | **Administration** page |
+| (EUR only) | **Master currency** of the application (Administration page, EUR by default): totals, balances and yields of all accounts are computed in it, whatever the currency of each account. Changing it recomputes everything. Exchange rates stay stored as units of currency per EUR, so the master currency needs rates (EUR does not) |
 
 ## Rules reproduced from the workbook
 

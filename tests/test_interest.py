@@ -74,9 +74,9 @@ class NativeInterestTest(unittest.TestCase):
     @staticmethod
     def _chf_account(con):
         # 1000 CHF -> 1100 CHF in one year (+10%), but the CHF doubled against the EUR: 500 EUR -> 1100 EUR
-        con.executemany("INSERT INTO transactions(account,date,amount_eur,balance_eur,native_amount,native_balance) VALUES('Suisse',?,?,?,?,?)",
+        con.executemany("INSERT INTO transactions(account,date,amount_main,balance_main,native_amount,native_balance) VALUES('Suisse',?,?,?,?,?)",
                         [("2023-01-01", 500.0, 500.0, 1000.0, 1000.0), ("2024-01-01", 0.0, 1100.0, 0.0, 1100.0)])
-        con.execute("INSERT INTO deposits(account,date,amount_eur,native_amount) VALUES('Suisse','2023-01-01',500.0,1000.0)")
+        con.execute("INSERT INTO deposits(account,date,amount_main,native_amount) VALUES('Suisse','2023-01-01',500.0,1000.0)")
         con.commit()
 
     def test_native_rate_ignores_the_exchange_rate(self):
@@ -131,9 +131,9 @@ class NativeInterestTest(unittest.TestCase):
         con, path = make_db()
         try:
             con.execute("UPDATE accounts SET currency='USD', mode='shares' WHERE id='Actions'")
-            con.executemany("INSERT INTO transactions(account,date,balance_eur,qty,price) VALUES('Actions',?,?,?,?)",
+            con.executemany("INSERT INTO transactions(account,date,balance_main,qty,price) VALUES('Actions',?,?,?,?)",
                             [("2023-01-01", 500.0, 10.0, 100.0), ("2024-01-01", 1100.0, 10.0, 110.0)])
-            con.execute("INSERT INTO deposits(account,date,amount_eur,native_amount) VALUES('Actions','2023-01-01',500.0,1000.0)")
+            con.execute("INSERT INTO deposits(account,date,amount_main,native_amount) VALUES('Actions','2023-01-01',500.0,1000.0)")
             own, _ = interest.key_interests(con, "Actions", dt.datetime(2024, 1, 1), native=True)
             self.assertAlmostEqual(own["y_all"], 0.10, places=3)
         finally:

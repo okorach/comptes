@@ -61,7 +61,7 @@ test('b64 encodes buffers, including larger than one chunk', () => {
 
 test('api returns the parsed body and sends JSON requests', async () => {
   let call;
-  const {ctx} = load(async (url, opts) => { call = {url, opts}; return {json: async () => ({ok: 1})}; });
+  const {ctx} = load(async (url, opts) => { if (url === '/api/thing') call = {url, opts}; return {json: async () => ({ok: 1})}; });  // the page itself loads data when the script starts
   const res = await ctx.api('thing', 'POST', {a: 1});
   assert.equal(res.ok, 1);
   assert.equal(call.url, '/api/thing');
@@ -86,7 +86,7 @@ test('route renders server errors as text, not HTML', async () => {
 
 test('account page escapes untrusted values in text and in inline handlers', async () => {
   const evil = '"><img src=x onerror=alert(1)>&quot;+alert(2)+&quot;';
-  const tx = {id: 7, date: '<b>2024</b>', amount_eur: 1, balance_eur: 1, description: evil, subcategory: evil, in_budget: '<i>1</i>'};
+  const tx = {id: 7, date: '<b>2024</b>', amount_main: 1, balance_main: 1, description: evil, subcategory: evil, in_budget: '<i>1</i>'};
   const account = {account: {id: evil, type: 'Courant', bank: evil, currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []};
   const meta = {categories: [{subcategory: evil}], currencies: ['EUR']};
   const body = url => (url.includes('transactions') ? [tx] : url.endsWith('/meta') ? meta : account);
@@ -146,4 +146,149 @@ test('rateCells renders one cell per period', () => {
   const cells = rateCells({y1: 0.1, n1: 0.05, y3: null, n3: null, y5: 0.2, n5: 0.1, y8: null, n8: null, y_all: 0.3, n_all: 0.2, currency: 'CHF'});
   assert.equal(cells.match(/<td class="n">/g).length, 5);
   assert.equal(cells.match(/<small/g).length, 3);
+});
+
+const FX_ACCOUNT = {account: {id: 'Suisse', type: 'Courant', bank: 'B', currency: 'CHF', status: 'Open', mode: 'flow'}, interests: null, deposits: []};
+const FX_META = {categories: [], currencies: ['CHF', 'USD', 'EUR', 'USD']};
+const fxPage = txs => load(async url => ({json: async () => (url.includes('transactions') ? txs : url.endsWith('/meta') ? FX_META : FX_ACCOUNT)}));
+const TX = {id: 1, date: '2024-01-01', amount_main: -80, balance_main: -80, native_amount: -160, native_balance: -160, description: 'US', in_budget: null};
+
+test('account page of a flow account offers an original amount in another currency, without the currency of the account', async () => {
+  const {ctx, els} = fxPage([TX]);
+  await ctx.account('Suisse');
+  const html = els['#main'].innerHTML;
+  const options = html.match(/id="f_fxc">(.*?)<\/select>/)[1];
+  assert.match(options, /<option>USD<\/option>/);
+  assert.match(options, /<option>EUR<\/option>/);
+  assert.doesNotMatch(options, /CHF/);
+  assert.equal(options.match(/USD/g).length, 1);
+  assert.match(html, /id="f_fxa"/);
+});
+
+test('balance and snapshot accounts do not take an original amount', async () => {
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? FX_META : {...FX_ACCOUNT, account: {...FX_ACCOUNT.account, mode: 'snapshot'}})}));
+  await ctx.account('Suisse');
+  assert.doesNotMatch(els['#main'].innerHTML, /f_fxa/);
+});
+
+test('transactions table shows the original amount and currency next to the amount in the account currency', async () => {
+  const {ctx, els} = fxPage([{...TX, fx_currency: 'USD', fx_amount: -100, fx_auto: 1}, {...TX, id: 2, fx_currency: null, fx_amount: null}]);
+  await ctx.account('Suisse');
+  const html = els['#main'].innerHTML;
+  assert.match(html, /Montant CHF[\s\S]*Solde CHF[\s\S]*Montant d'origine[\s\S]*Devise d'origine[\s\S]*Description/);
+  const row = plain(html.match(/<tr><td>2024-01-01<\/td>.*?<\/tr>/s)[0]);
+  assert.match(row, /-160,00[\s\S]*-160,00[\s\S]*-100,00\s*<\/td><td>USD<\/td><td>US/);
+});
+
+test('the original amount columns only appear once a transaction has one', async () => {
+  const {ctx, els} = fxPage([TX]);
+  await ctx.account('Suisse');
+  assert.doesNotMatch(els['#main'].innerHTML, /Montant d'origine<\/th>|Montant d'origine <button/);
+});
+
+test('editing a converted transaction leaves the amount empty so that it is converted again', async () => {
+  const {ctx, els} = fxPage([]);
+  await ctx.account('Suisse');
+  ctx.editTx({...TX, fx_currency: 'USD', fx_amount: -100, fx_auto: 1});
+  assert.equal(els['#f_amt'].value, '');
+  assert.equal(els['#f_fxc'].value, 'USD');
+  assert.equal(els['#f_fxa'].value, -100);
+  ctx.editTx({...TX, fx_currency: 'USD', fx_amount: -100, fx_auto: 0, native_amount: -165});
+  assert.equal(els['#f_amt'].value, -165);
+});
+
+test('saving sends the original amount and currency', async () => {
+  const calls = [];
+  const {ctx, mk} = load(async (url, init) => {
+    calls.push({url, body: init?.body && JSON.parse(init.body)});
+    return {json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? FX_META : FX_ACCOUNT)};
+  });
+  await ctx.account('Suisse');
+  mk('#f_date').value = '2024-03-01';
+  mk('#f_fxc').value = 'USD';
+  mk('#f_fxa').value = '-100';
+  await ctx.saveTx('Suisse');
+  const post = calls.find(c => c.body && c.body.date === '2024-03-01');
+  assert.equal(post.body.fx_currency, 'USD');
+  assert.equal(post.body.fx_amount, '-100');
+});
+
+/* ---------------------------------------------------------------- master currency of the application */
+// the page loads its own data when the script starts: let it finish before driving another page
+const settle = () => new Promise(r => setTimeout(r, 10));
+const masterPage = (master, extra = {}) => load(async url => {
+  const body = {
+    accounts: [{id: 'Courant', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: '2024-01-01', currency: 'EUR', balance_main: 200, balance_native: 100},
+               {id: 'Suisse', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: '2024-01-01', currency: 'CHF', balance_main: 200, balance_native: 200}],
+    meta: {categories: [], currencies: ['CHF', 'USD', 'EUR', 'USD'], master_currency: master, types: [], banks: []},
+    networth: [], interests: [],
+  };
+  const key = Object.keys(body).find(k => url.includes(k));
+  return {json: async () => (extra[key] ?? body[key] ?? {})};
+});
+
+test('amounts are shown in the master currency of the application', async () => {
+  const {ctx, els} = masterPage('CHF');
+  await ctx.home();
+  const html = plain(els['#main'].innerHTML);
+  assert.match(html, /Solde CHF/);
+  assert.doesNotMatch(html, /Solde €/);
+  assert.match(html, /200,00 CHF/);
+});
+
+test('only the accounts that are not in the master currency show their balance in their own currency', async () => {
+  const {ctx, els} = masterPage('CHF');
+  await ctx.home();
+  const rows = plain(els['#main'].innerHTML).match(/<tr class="click".*?<\/tr>/gs);
+  assert.match(rows.find(r => r.includes('Courant')), /100,00 €<\/td><td class="n ">200,00 CHF/);   // EUR account: native balance shown
+  assert.doesNotMatch(rows.find(r => r.includes('Suisse')), /<td class="n mut">[^<\s]/);                // CHF account: it is the master currency
+});
+
+test('the home chart is in the master currency', async () => {
+  const {ctx, els} = masterPage('USD', {networth: [{month: '2024-01', total: 5}, {month: '2024-02', total: 6}]});
+  await ctx.home();
+  assert.equal(plain(els['#main'].innerHTML).match(/\$/g).length > 0, true);
+  assert.doesNotMatch(els['#main'].innerHTML, /Patrimoine: [\d  ]+ €/);
+});
+
+test('account page: the amount columns follow the master currency', async () => {
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'CHF'} : {...FX_ACCOUNT, account: {...FX_ACCOUNT.account, currency: 'EUR'}})}));
+  await ctx.account('Courant');
+  const html = els['#main'].innerHTML;
+  assert.match(html, /Montant CHF[\s\S]*Solde CHF[\s\S]*Montant €[\s\S]*Solde €/);  // master currency columns, then the ones of the EUR account
+  const same = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? {categories: [], currencies: ['CHF'], master_currency: 'CHF'} : FX_ACCOUNT)}));
+  await same.ctx.account('Suisse');
+  assert.equal((same.els['#main'].innerHTML.match(/>Montant CHF </g) || []).length, 1);  // no duplicated native columns
+});
+
+test('administration page lets the master currency be changed, and reloads everything', async () => {
+  const calls = [];
+  const {ctx, els, mk} = load(async (url, init) => {
+    calls.push({url, body: init?.body && JSON.parse(init.body)});
+    return {json: async () => (url.endsWith('/meta') ? {categories: [], types: [], banks: [], currencies: ['CHF', 'USD', 'EUR'], master_currency: 'CHF'} : [])};
+  });
+  await settle();
+  await ctx.admin();
+  assert.match(els['#main'].innerHTML, /<option selected>CHF<\/option>/);
+  mk('#m_cur').value = 'USD';
+  await ctx.setMaster();
+  assert.deepEqual(calls.find(c => c.url === '/api/master_currency').body, {currency: 'USD'});
+  assert.match(els['#main'].innerHTML, /Devise principale modifiée/);
+});
+
+test('administration page shows the refusal of an unknown master currency', async () => {
+  const {ctx, els, mk} = load(async url => ({json: async () => (url.endsWith('/meta') ? {categories: [], types: [], banks: [], currencies: ['EUR'], master_currency: 'EUR'} : url.endsWith('master_currency') ? {error: 'no FX rates for JPY'} : [])}));
+  await settle();
+  await ctx.admin();
+  mk('#m_cur').value = 'JPY';
+  await ctx.setMaster();
+  assert.match(els['#m_err'].textContent, /no FX rates for JPY/);
+});
+
+test('a master currency that is not a currency code is ignored', async () => {
+  const evil = '<img src=x onerror=alert(1)>';
+  const {ctx, els} = masterPage(evil, {networth: [{month: '2024-01', total: 5}, {month: '2024-02', total: 6}]});
+  await ctx.home();
+  assert.doesNotMatch(els['#main'].innerHTML, /<img/);
+  assert.match(els['#main'].innerHTML, /Solde €/);
 });

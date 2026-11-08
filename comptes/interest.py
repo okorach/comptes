@@ -10,6 +10,8 @@ import datetime as dt
 import sqlite3
 from bisect import bisect_right
 
+from . import calc
+
 EPS = 1e-12
 
 
@@ -74,7 +76,7 @@ def key_interests(con: sqlite3.Connection, account: str, now: dt.datetime | None
     """Return {'y1','y3','y5','y8','y_all'} gross rates (None where not applicable).
     With native=True the rates are computed on the amounts in the currency of the account (no exchange rate effect)."""
     # shares accounts have no stored native balance: it is quantity x price
-    amount_col, balance_col = ("native_amount", "COALESCE(native_balance, qty*price)") if native else ("amount_eur", "balance_eur")
+    amount_col, balance_col = ("native_amount", "COALESCE(native_balance, qty*price)") if native else ("amount_main", "balance_main")
     now = now or dt.datetime.now()
     a = con.execute("SELECT a.tax, t.interest_period FROM accounts a LEFT JOIN account_types t ON t.name=a.type "
                     "WHERE a.id=?", (account,)).fetchone()
@@ -99,8 +101,8 @@ def key_interests(con: sqlite3.Connection, account: str, now: dt.datetime | None
 
 def recalc(con, account, now=None):
     """Compute key yields and store them net of tax (as the Interests sheet does).
-    For an account that is not in EUR, the yields in its own currency are stored too (without the exchange rate effect).
-    Returns the yields in EUR."""
+    For an account that is not in the master currency of the application, the yields in its own currency are stored too
+    (without the exchange rate effect). Returns the yields in the master currency."""
     now = now or dt.datetime.now()
     acc = con.execute("SELECT tax, currency FROM accounts WHERE id=?", (account,)).fetchone()
     tax = acc["tax"] or 0.0
@@ -110,7 +112,7 @@ def recalc(con, account, now=None):
         return {k: (None if v is None else v * (1 - tax)) for k, v in rates.items()}  # stored NET, like the workbook
 
     rates = net(key_interests(con, account, now)[0])
-    foreign = acc["currency"] not in (None, "EUR")
+    foreign = acc["currency"] not in (None, calc.master_currency(con))
     native = net(key_interests(con, account, now, native=True)[0]) if foreign else dict.fromkeys(rates)
     con.execute("INSERT OR REPLACE INTO interests(account,calc_date,y1,y3,y5,y8,y_all,n1,n3,n5,n8,n_all) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 (account, now.isoformat(timespec="seconds"), rates["y1"], rates["y3"], rates["y5"], rates["y8"], rates["y_all"],

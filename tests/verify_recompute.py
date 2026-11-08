@@ -10,13 +10,13 @@ con = connect(tmp)
 fx = calc.Fx(con)
 bad = 0
 for (acc,) in con.execute("SELECT id FROM accounts").fetchall():
-    before = [(r["id"], r["amount_eur"], r["balance_eur"]) for r in con.execute("SELECT id,amount_eur,balance_eur FROM transactions WHERE account=? ORDER BY date,id", (acc,))]
+    before = [(r["id"], r["amount_main"], r["balance_main"]) for r in con.execute("SELECT id,amount_main,balance_main FROM transactions WHERE account=? ORDER BY date,id", (acc,))]
     if not before: continue
     try:
         calc.recompute_account(con, acc, fx)
     except Exception as e:
         print("ERR", acc, e); bad += 1; continue
-    after = {r["id"]: (r["amount_eur"], r["balance_eur"]) for r in con.execute("SELECT id,amount_eur,balance_eur FROM transactions WHERE account=?", (acc,))}
+    after = {r["id"]: (r["amount_main"], r["balance_main"]) for r in con.execute("SELECT id,amount_main,balance_main FROM transactions WHERE account=?", (acc,))}
     dm = db = 0; worst = (0, None)
     for i, a, b in before:
         na, nb = after[i]

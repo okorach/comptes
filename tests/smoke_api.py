@@ -15,7 +15,7 @@ n0 = len(call("GET", "/api/account/BoursoBank%20Olivier/transactions?limit=5000"
 tid = call("POST", "/api/account/BoursoBank%20Olivier/transactions", {"date": "2026-10-18", "native_amount": "-12,50", "description": "TEST", "subcategory": "Loisirs"})
 print("added", tid)
 t = call("GET", "/api/account/BoursoBank%20Olivier/transactions?limit=2")
-print(t[0]["description"], t[0]["amount_eur"], t[0]["balance_eur"], "prev bal", t[1]["balance_eur"])
+print(t[0]["description"], t[0]["amount_main"], t[0]["balance_main"], "prev bal", t[1]["balance_main"])
 print("del", call("DELETE", f"/api/transaction/{tid['id']}"), len(call("GET", "/api/account/BoursoBank%20Olivier/transactions?limit=5000")) == n0)
 sp = call("GET", "/api/spending?group=month&months=24")
 print("spending months", len(sp["series"]), sp["series"][-2:], sp["categories"][:3])

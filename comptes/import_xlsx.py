@@ -35,6 +35,7 @@ def read_params(wbv, con):
         if r[15] and r[16] is not None:  # P,Q,R account types
             con.execute("INSERT OR REPLACE INTO account_types VALUES(?,?,?)", (r[15], int(r[16]), num(r[17]) or 0))
     con.execute("INSERT OR REPLACE INTO params VALUES('default_currency','EUR')")
+    con.execute("INSERT OR REPLACE INTO params VALUES('master_currency','EUR')")  # the workbook is in EUR
 
 
 def read_fx(wbv, con):
@@ -121,7 +122,7 @@ def import_account(name, wbv, wbf, con):
             else:
                 a_nat, b_nat = num(get(r, i_nat_amt)), num(get(r, i_nat_bal))
             con.execute(
-                "INSERT INTO transactions(account,date,amount_eur,balance_eur,native_amount,native_balance,"
+                "INSERT INTO transactions(account,date,amount_main,balance_main,native_amount,native_balance,"
                 "description,subcategory,in_budget,qty,price) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                 (name, iso(d), a_eur, b_eur, a_nat, b_nat, get(r, i_desc), get(r, i_sub),
                  num(get(r, i_bud)), num(get(r, i_qty)), num(get(r, i_px))))
@@ -130,7 +131,7 @@ def import_account(name, wbv, wbf, con):
             a = num(get(r, dep_col + 1))
             nat = num(get(r, dep_col + 2)) if cur != "EUR" and "Montant " + cur in cols else a
             if a is not None:
-                con.execute("INSERT INTO deposits(account,date,amount_eur,native_amount) VALUES(?,?,?,?)",
+                con.execute("INSERT INTO deposits(account,date,amount_main,native_amount) VALUES(?,?,?,?)",
                             (name, iso(get(r, dep_col)), a, nat))
                 nd += 1
     return n, nd

@@ -108,7 +108,7 @@ test('sorting applies to the filtered rows, and sorting another column restarts 
 });
 
 test('the home, interests and account pages use filterable tables', async () => {
-  const acc = {id: 'A', status: 'Open', type: 'Livret', bank: 'ING', availability: 0, last_date: '2024-01-01', currency: 'EUR', balance_eur: 10, balance_native: 10};
+  const acc = {id: 'A', status: 'Open', type: 'Livret', bank: 'ING', availability: 0, last_date: '2024-01-01', currency: 'EUR', balance_main: 10, balance_native: 10};
   const {ctx, els} = load(async url => ({json: async () => (url.includes('networth') ? [] : url.endsWith('interests') ? [{account: 'A', type: 'Livret', currency: 'EUR', calc_date: '2024-01-01T10:00:00', y1: 0.02}] : [acc])}));
   await ctx.home();
   assert.match(els['#main'].innerHTML, /<table class="data">[\s\S]*Filtrer Banque[\s\S]*>1 comptes</);

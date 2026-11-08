@@ -16,14 +16,16 @@ CREATE TABLE IF NOT EXISTS fx_rates(currency TEXT, date TEXT, rate REAL, PRIMARY
 CREATE TABLE IF NOT EXISTS params(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS transactions(
   id INTEGER PRIMARY KEY AUTOINCREMENT, account TEXT NOT NULL REFERENCES accounts(id),
-  date TEXT NOT NULL, amount_eur REAL, balance_eur REAL,
-  native_amount REAL, native_balance REAL,
-  description TEXT, subcategory TEXT, in_budget REAL, qty REAL, price REAL
+  date TEXT NOT NULL, amount_main REAL, balance_main REAL,  -- amounts in the master currency of the application
+  native_amount REAL, native_balance REAL,  -- amounts in the currency of the account
+  description TEXT, subcategory TEXT, in_budget REAL, qty REAL, price REAL,
+  fx_currency TEXT, fx_amount REAL,         -- original amount, when the transaction is in a currency other than the one of the account
+  fx_auto INTEGER DEFAULT 0                 -- 1: native_amount is converted from fx_amount, 0: it was entered
 );
 CREATE INDEX IF NOT EXISTS ix_tr_acc ON transactions(account, date);
 CREATE TABLE IF NOT EXISTS deposits(
   id INTEGER PRIMARY KEY AUTOINCREMENT, account TEXT NOT NULL REFERENCES accounts(id),
-  date TEXT NOT NULL, amount_eur REAL, native_amount REAL
+  date TEXT NOT NULL, amount_main REAL, native_amount REAL
 );
 CREATE INDEX IF NOT EXISTS ix_dep_acc ON deposits(account, date);
 CREATE TABLE IF NOT EXISTS interests(
@@ -34,14 +36,32 @@ CREATE TABLE IF NOT EXISTS interests(
 
 
 NATIVE_INTEREST_COLUMNS = ("n1", "n3", "n5", "n8", "n_all")
+# Columns introduced after the first version of the database: table -> {column: definition}
+ADDED_COLUMNS = {
+    "interests": dict.fromkeys(NATIVE_INTEREST_COLUMNS, "REAL"),
+    "transactions": {"fx_currency": "TEXT", "fx_amount": "REAL", "fx_auto": "INTEGER DEFAULT 0"},
+}
+
+
+# Columns renamed when the master currency of the application became configurable (they used to be in EUR): table -> {old: new}
+RENAMED_COLUMNS = {
+    "transactions": {"amount_eur": "amount_main", "balance_eur": "balance_main"},
+    "deposits": {"amount_eur": "amount_main"},
+}
 
 
 def _migrate(con: sqlite3.Connection) -> None:
-    """Adds the columns introduced after the first version of the database"""
-    cols = {r[1] for r in con.execute("PRAGMA table_info(interests)")}
-    for c in NATIVE_INTEREST_COLUMNS:
-        if c not in cols:
-            con.execute(f"ALTER TABLE interests ADD COLUMN {c} REAL")
+    """Brings a database created by an older version up to date: renamed and added columns"""
+    for table, renamed in RENAMED_COLUMNS.items():
+        cols = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+        for old, new in renamed.items():
+            if old in cols and new not in cols:
+                con.execute(f"ALTER TABLE {table} RENAME COLUMN {old} TO {new}")
+    for table, added in ADDED_COLUMNS.items():
+        cols = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+        for name, definition in added.items():
+            if name not in cols:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
 
 def connect(path=None):
