@@ -92,7 +92,7 @@ function tableFilterCell(id, col, i){
 function tableWithOptions(col, rows){
   if (col.filter === false || col.filter === 'text') return col;
   const distinct = [...new Set(rows.map(r => tableText(col, r)))];
-  return distinct.length <= TABLE_SELECT_MAX ? {...col, options: distinct.sort(tableCompare)} : col;
+  return distinct.length <= TABLE_SELECT_MAX ? {...col, options: distinct.toSorted(tableCompare)} : col;
 }
 
 /* cols: [{label, value: row => sortable/filterable value, num?: right-aligned, sort?: false, filter?: false | 'text'}], row: row => '<tr>…</tr>'.
