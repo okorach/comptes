@@ -205,3 +205,11 @@ test('right axis labels sit on the gridlines of the left axis', () => {
   right.forEach((y, j) => assert.ok(Math.abs(y - grid[j]) < 1e-6, `right label ${j} at ${y}, gridline at ${grid[j]}`));
   left.forEach((y, j) => assert.ok(Math.abs(y - grid[j]) < 1e-6));
 });
+
+test('a chart scrolls sideways on a narrow screen: the plot and its sliders scroll together, the legend stays put', () => {
+  const {ctx} = load();
+  const html = ctx.drawChart(['a', 'b', 'c', 'd'], [{name: 's', color: '#000', type: 'bar', values: [1, 2, 3, 4]}]);
+  const scroll = html.match(/<div class="chart-scroll"><div class="chart-body">(.*?)<\/div><\/div><div class="mut chart-legend">/s);
+  assert.ok(scroll);
+  assert.match(scroll[1], /chart-plot-\d+[\s\S]*chart-range/);
+});

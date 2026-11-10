@@ -433,3 +433,15 @@ test('route sends #/search to the search page and #/account/<id>/tx/<n> to the a
   await ctx.route();
   assert.ok(calls.includes('/api/account/Suisse/transactions?limit=500&include=12'));
 });
+
+/* ---------------------------------------------------------------- responsive layout */
+test('the panes of the pages stack on a narrow screen: classes instead of fixed widths', async () => {
+  const {ctx, els} = fxPage([TX]);
+  await ctx.account('Suisse');
+  assert.match(els['#main'].innerHTML, /<div class="pane pane-wide">/);
+  assert.doesNotMatch(els['#main'].innerHTML, /min-width:\d+px/);
+  const home = masterPage('EUR');
+  await home.ctx.home();
+  assert.equal((home.els['#main'].innerHTML.match(/<div class="pane">/g) || []).length, 3);
+  assert.doesNotMatch(home.els['#main'].innerHTML, /min-width:\d+px/);
+});

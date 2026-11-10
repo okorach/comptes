@@ -1,12 +1,14 @@
 :root{--bg:#fff;--fg:#1c1f24;--mut:#6b7280;--line:#e5e7eb;--acc:#2563eb;--neg:#b91c1c;--pos:#15803d;--pos-light:#4ade80;--card:#f8fafc}
 @media(prefers-color-scheme:dark){:root{--bg:#14171c;--fg:#e6e8eb;--mut:#9aa3af;--line:#2a2f37;--acc:#60a5fa;--neg:#f87171;--pos:#4ade80;--pos-light:#86efac;--card:#1b1f26}}
 *{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
 body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--fg)}
 header{padding:10px 20px;border-bottom:1px solid var(--line);display:flex;gap:24px;align-items:baseline;flex-wrap:wrap}
 h1{font-size:18px;margin:0} h2{margin:8px 0} h3{margin:20px 0 6px}
-nav a{margin-right:16px;color:var(--mut);cursor:pointer;text-decoration:none}
+nav{display:flex;flex-wrap:wrap;gap:0 16px}
+nav a{padding:4px 0;color:var(--mut);cursor:pointer;text-decoration:none}
 nav a.on{color:var(--acc);font-weight:600}
-main{padding:14px 20px;max-width:1250px}
+main{padding:14px 20px;max-width:1250px;overflow-wrap:anywhere}
 table{border-collapse:collapse;width:100%} th,td{padding:4px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 th{color:var(--mut);font-weight:600;white-space:nowrap} td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .neg{color:var(--neg)} .pos{color:var(--pos)} .mut{color:var(--mut)} .big{font-size:26px;font-weight:600;margin:2px 0 10px}
@@ -38,3 +40,28 @@ svg text{fill:currentColor}
 .chart-tip b{font-variant-numeric:tabular-nums}
 .data button.sort{border:0;background:none;color:var(--mut);padding:0 2px;font-size:11px;opacity:.55} .data button.sort:hover,.data button.sort.on{opacity:1;color:var(--acc)}
 .data tr.filters th{padding:2px 8px 6px;font-weight:400} .data tr.filters input,.data tr.filters select{width:100%;min-width:60px;max-width:180px;padding:2px 4px;font-size:12px}
+
+/* ---- responsive layout: the panes of a page sit side by side when there is room, one under the other otherwise */
+.pane{flex:1;min-width:min(260px,100%)} .pane-wide{flex:3;min-width:min(520px,100%)}
+.chart-scroll{overflow-x:auto} .chart-body{min-width:720px}  /* a chart keeps a readable size: it scrolls sideways on a narrow screen */
+input,select{max-width:100%}
+.row label.inline{flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px}
+@media(max-width:700px){
+  header{padding:8px 12px;gap:4px 16px}
+  main{padding:10px 12px}
+  nav{gap:0 14px}
+  .big{font-size:22px}
+  th,td{padding:4px 6px}
+  .card{padding:8px 10px}
+  .data tr.filters input,.data tr.filters select{min-width:72px}
+  .row>label:not([style]):not(.inline){flex:1 1 42%;min-width:120px}
+  .row>label:not([style]):not(.inline)>input:not([type=checkbox]):not([type=file]),.row>label:not([style]):not(.inline)>select{width:100%;min-width:0;font-size:16px}
+  .row>button{flex:1 1 auto}
+}
+@media(pointer:coarse){  /* fingers: bigger targets */
+  button,input,select{min-height:38px}
+  input[type=checkbox]{min-height:0;width:20px;height:20px}
+  button.link,.data button.sort{min-height:0;padding:6px 8px}
+  .chart-range input{min-height:22px}
+  nav a{padding:8px 0}
+}

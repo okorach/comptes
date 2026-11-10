@@ -196,7 +196,7 @@ function drawChart(labels, series, opt = {}){
   const win = n < 3 ? '' : `<span class="chart-window" id="chart-win-${id}">${chartWindowText(c)}</span>`;
   const wrap = `<div class="chart-wrap" onmousemove="chartHover(${id},event)" onmouseleave="chartLeave(${id})">` +
     `<div id="chart-plot-${id}">${chartSvg(id)}</div><div class="chart-hover" id="chart-hover-${id}"></div></div>`;
-  return `<div id="chart-${id}">${wrap}${chartControls(c, id)}` +
+  return `<div id="chart-${id}"><div class="chart-scroll"><div class="chart-body">${wrap}${chartControls(c, id)}</div></div>` +
     `<div class="mut chart-legend"><span>${leg}</span>${win}</div></div>`;
 }
 if (typeof module !== 'undefined') module.exports = {niceTicks, niceStep, fmtTick};
