@@ -103,6 +103,23 @@ class ServerTest(unittest.TestCase):
         self.assertIn(res["offline"], (True, False))  # offline only if there is something to retrieve
         self.assertEqual(res["added"], 0)
 
+    def test_search_finds_a_transaction_of_any_account(self):
+        tid = self.call("POST", "/api/account/Suisse/transactions", {"date": "2031-05-05", "native_amount": "77", "description": "Zorglub"})["id"]
+        res = self.call("GET", "/api/search?text=zorglub&amount_min=77&date_from=2031-01-01")
+        self.assertEqual((res["total"], res["truncated"], [r["account"] for r in res["rows"]]), (1, False, ["Suisse"]))
+        self.assertEqual(self.call("GET", "/api/search?text=zorglub&amount_min=1000")["rows"], [])
+        self.assertEqual(self.call("GET", "/api/search?date_from=hier")["HTTP"], 400)
+        self.call("DELETE", f"/api/transaction/{tid}")
+
+    def test_account_transactions_reach_back_to_the_requested_one(self):
+        acc = "/api/account/Courant"
+        total = len(self.call("GET", acc + "/transactions?limit=100000"))
+        tid = self.call("POST", acc + "/transactions", {"date": "2000-01-01", "native_amount": "1", "description": "Tout premier"})["id"]
+        self.assertNotIn(tid, [r["id"] for r in self.call("GET", acc + "/transactions?limit=1")])
+        reached = self.call("GET", acc + f"/transactions?limit=1&include={tid}")
+        self.assertEqual((tid in [r["id"] for r in reached], len(reached)), (True, total + 1))
+        self.call("DELETE", f"/api/transaction/{tid}")
+
     def test_import_preview(self):
         csv = "d;a;b;c\n2024-03-01;x;SHOP;-3,10\n".encode()
         res = self.call("POST", "/api/account/Courant/import",

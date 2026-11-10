@@ -31,7 +31,8 @@ async function route(){
     if (name === 'spending') await spending();
     else if (name === 'interests') await interests();
     else if (name === 'admin') await admin();
-    else if (name === 'account') await account(decodeURIComponent(rest.join('/')));
+    else if (name === 'search') await searchPage();
+    else if (name === 'account') await account(decodeURIComponent(rest[0] ?? ''), '', rest[1] === 'tx' ? Number(rest[2]) || null : null);  // #/account/<id>/tx/<n> shows transaction n
     else await home();
   } catch (e) { const err = document.createElement('div'); err.className = 'err'; err.textContent = 'Erreur : ' + e.message; $('#main').replaceChildren(err); }
 }
@@ -116,11 +117,12 @@ async function recalc(){
 }
 
 /* ------------------------------------------------------------------ account */
+let FOCUS = null;  // transaction to show (highlighted) in the account page: the one found by the search
 function txRow(t, foreign, aid, hasFx = false){
   const native = foreign ? `<td class="n mut">${num(t.native_amount, '')}</td><td class="n mut">${num(t.native_balance, '')}</td>` : '';
   const origin = hasFx ? `<td class="n mut">${num(t.fx_amount, '')}</td><td>${esc(t.fx_currency)}</td>` : '';
   const budget = t.in_budget ? ` <span class="mut">(${esc(t.in_budget)})</span>` : '';
-  return `<tr><td>${esc(t.date)}</td><td class="n ${cls(t.amount_main)}">${num(t.amount_main)}</td><td class="n">${num(t.balance_main)}</td>${native}${origin}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
+  return `<tr id="tx-${Number(t.id)}"${t.id === FOCUS ? ' class="hl"' : ''}><td>${esc(t.date)}</td><td class="n ${cls(t.amount_main)}">${num(t.amount_main)}</td><td class="n">${num(t.balance_main)}</td>${native}${origin}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
   <td><button class="link" onclick="editTx(${esc(JSON.stringify(t))})">modifier</button><button class="link" onclick="delTx(${Number(t.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
 }
 const NATIVE_KEY = {y1: 'n1', y3: 'n3', y5: 'n5', y8: 'n8', y_all: 'n_all'};
@@ -176,8 +178,10 @@ const fxFields = (a, m) => {
   return `<label>Devise d'origine<select id="f_fxc"><option value=""></option>${opts}</select></label><label>Montant d'origine<input id="f_fxa" size="10"></label>`;
 };
 let EDIT = null;
-async function account(id, msg = ''){
-  const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions?limit=500'), meta()]);
+async function account(id, msg = '', focus = null){
+  FOCUS = focus;
+  const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions?limit=500' + (focus ? '&include=' + Number(focus) : '')), meta()]);
+  if (focus && !tr.some(t => t.id === focus)) msg = 'Écriture introuvable (supprimée ?)';
   const a = info.account, cur = esc(sym(a.currency)), foreign = a.currency !== MASTER;
   const hasDep = !['Courant', 'Autres', null].includes(a.type);
   const bank = a.bank || '';
@@ -186,7 +190,7 @@ async function account(id, msg = ''){
   const fields = modeFields(a, m, cur);
   const importBanks = ['BoursoBank', 'ING', 'LCL', 'UBS', 'Revolut', 'Yuh', 'generic'];
   $('#main').innerHTML = `<h2>${esc(a.id)} <span class="mut" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
-  <div class="row"><button onclick="location.hash='#/'">← Retour</button>
+  <div class="row">${focus ? '<button onclick="location.hash=\'#/search\'">← Retour à la recherche</button>' : '<button onclick="location.hash=\'#/\'">← Retour</button>'}
   <button onclick="setStatus('${jsq(a.id)}','${a.status === 'Open' ? 'Closed' : 'Open'}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
   <a href="/api/account/${enc(a.id)}/export.csv"><button>Exporter CSV</button></a>
   ${a.mode === 'flow' || a.mode === 'static' ? `<label style="flex-direction:row;align-items:center;gap:6px">Importer <select id="imp_bank">${importBanks.map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('')}</select><input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : ''}</div>
@@ -198,6 +202,7 @@ async function account(id, msg = ''){
   <div class="row" style="align-items:start"><div style="flex:3;min-width:520px">${dataTable(txColumns(foreign, sym(a.currency), hasFx), tr, t => txRow(t, foreign, a.id, hasFx), {noun: 'écritures (les plus récentes)'})}</div>
   ${hasDep ? depositsPanel(info, a, cur) : ''}</div>`;
   EDIT = null;
+  $('#tx-' + focus)?.scrollIntoView?.({block: 'center'});
 }
 function resetForm(){ EDIT = null; $('#form_title').textContent = 'Nouvelle écriture'; ['f_amt', 'f_bal', 'f_qty', 'f_px', 'f_desc', 'f_bud', 'f_fxc', 'f_fxa'].forEach(i => { if ($('#' + i)) $('#' + i).value = ''; }); }
 function editTx(t){
@@ -224,6 +229,54 @@ async function setStatus(id, status){ await api('account/' + enc(id), 'PUT', {st
 async function recalcOne(id){ await api('interests/recalc', 'POST', {account: id}); await account(id, 'Rendements recalculés'); }
 async function addDep(id){ try { await api('account/' + enc(id) + '/deposits', 'POST', {date: $('#d_date').value, amount: $('#d_amt').value}); await account(id, 'Versement ajouté'); } catch (e) { alert(e.message); } }
 async function delDep(did, id){ await api('deposit/' + did, 'DELETE'); await account(id); }
+
+/* ------------------------------------------------------------------ search */
+const SEARCH_CRITERIA = ['text', 'account', 'category', 'subcategory', 'date_from', 'date_to', 'amount_min', 'amount_max'];
+let SEARCH = {};  // criteria of the last search: kept to find them again when coming back from an account
+const searchColumns = (foreign, hasFx) => [
+  {label: 'Date', value: t => t.date}, {label: 'Compte', value: t => t.account}, {label: 'Montant ' + sym(MASTER), num: true, value: t => t.amount_main},
+  ...(foreign ? [{label: 'Montant du compte', num: true, value: t => t.currency === MASTER ? null : t.native_amount}] : []),
+  ...(hasFx ? [{label: "Montant d'origine", num: true, value: t => t.fx_amount}, {label: "Devise d'origine", value: t => t.fx_currency}] : []),
+  {label: 'Description', value: t => t.description}, {label: 'Catégorie', value: t => t.category}, {label: 'Sous-cat.', value: t => t.subcategory},
+  {label: '', sort: false, filter: false, value: () => null},
+];
+const searchLink = t => `#/account/${enc(t.account)}/tx/${Number(t.id)}`;  // the transaction in the list of its account
+function searchRow(foreign, hasFx){
+  return t => {
+    const inAccount = t.currency === MASTER ? '' : num(t.native_amount, sym(t.currency));
+    const own = foreign ? `<td class="n mut">${inAccount}</td>` : '';
+    const origin = hasFx ? `<td class="n mut">${num(t.fx_amount, '')}</td><td>${esc(t.fx_currency)}</td>` : '';
+    return `<tr class="click" onclick="location.hash='${searchLink(t)}'"><td>${esc(t.date)}</td><td>${esc(t.account)}</td><td class="n ${cls(t.amount_main)}">${num(t.amount_main)}</td>${own}${origin}`
+      + `<td>${esc(t.description)}</td><td>${esc(t.category)}</td><td>${esc(t.subcategory)}</td><td><a href="${searchLink(t)}">voir</a></td></tr>`;
+  };
+}
+const searchOptions = (values, current) => '<option value="">(tous)</option>' + values.map(v => `<option${v === current ? ' selected' : ''}>${esc(v)}</option>`).join('');
+async function searchPage(){
+  const [m, accounts] = await Promise.all([meta(), api('accounts')]);
+  const categories = [...new Set(m.categories.map(c => c.category).filter(Boolean))].toSorted(tableCompare), c = SEARCH;
+  const field = (id, label, extra = '') => `<label>${label}<input id="s_${id}" value="${esc(c[id] ?? '')}" ${extra}></label>`;
+  const select = (id, label, values) => `<label>${label}<select id="s_${id}">${searchOptions(values, c[id])}</select></label>`;
+  $('#main').innerHTML = `<h2>Recherche d'écritures</h2>
+  <form class="card" onsubmit="searchRun(); return false"><div class="row">${field('text', 'Texte', 'size="26" placeholder="description ou sous-catégorie"')}
+  ${select('account', 'Compte', accounts.map(a => a.id))}${select('category', 'Catégorie', categories)}${select('subcategory', 'Sous-catégorie', m.categories.map(x => x.subcategory).toSorted(tableCompare))}</div>
+  <div class="row">${field('date_from', 'Date du', 'type="date"')}${field('date_to', 'au', 'type="date"')}${field('amount_min', 'Montant de', 'size="9" inputmode="decimal"')}${field('amount_max', 'à', 'size="9" inputmode="decimal"')}
+  <button class="primary" type="submit">Rechercher</button><button type="button" onclick="searchClear()">Effacer</button></div>
+  <div class="mut" style="font-size:12px">Tous les critères renseignés doivent être satisfaits. Le texte cherche chaque mot (sans tenir compte des accents ni des majuscules). Le montant est en valeur absolue : en ${esc(MASTER)}, dans la devise du compte ou dans la devise d'origine.</div>
+  <div id="s_err" class="err"></div></form><div id="s_res"></div>`;
+  if (SEARCH_CRITERIA.some(k => c[k])) await searchRun();
+}
+function searchClear(){ SEARCH = {}; void searchPage(); }
+async function searchRun(){
+  SEARCH = Object.fromEntries(SEARCH_CRITERIA.map(k => [k, $('#s_' + k).value.trim()]));
+  $('#s_err').textContent = '';
+  try {
+    const query = SEARCH_CRITERIA.filter(k => SEARCH[k]).map(k => k + '=' + enc(SEARCH[k])).join('&');
+    const r = await api('search?' + query);
+    const foreign = r.rows.some(t => t.currency !== MASTER), hasFx = r.rows.some(t => t.fx_currency);
+    const more = r.truncated ? `<div class="mut">${Number(r.total)} écritures correspondent : les ${Number(r.rows.length)} plus récentes sont affichées, affinez la recherche.</div>` : '';
+    $('#s_res').innerHTML = r.rows.length ? more + dataTable(searchColumns(foreign, hasFx), r.rows, searchRow(foreign, hasFx), {noun: 'écritures'}) : '<div class="mut">Aucune écriture trouvée</div>';
+  } catch (e) { $('#s_err').textContent = e.message; }
+}
 
 /* import */
 let IMPORT = null;
