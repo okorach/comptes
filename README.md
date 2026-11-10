@@ -21,6 +21,7 @@ The database is a single SQLite file (`comptes.db`, git-ignored). Back it up lik
 | `Solde`, `Solde par compte` | Overview: net worth over time, totals by bank / availability year / type |
 | `Budget`, `Stats`, `Ventilation`, `Etude` pivots, `GenBudget` | **Dépenses** page (month / quarter / year, category matrix, 12-month average, spreading over N months) |
 | (Excel filter on each sheet) | **Recherche** page: finds entries across all the accounts by free text (every word, accents and case ignored), account, category / sub-category, date range and amount range (absolute value, in the master currency, the account currency or the original currency). Each result links to the entry in its own account, which opens on it, highlighted; « Retour à la recherche » finds the search again |
+| (desktop only) | **Responsive pages**: they adapt from a wide screen to a phone (header and menu wrap, the panes stack, form fields share the line, wide tables and charts scroll sideways inside their frame instead of the page, bigger touch targets on touchscreens) |
 | `Interests` sheet + Goal Seek | **Rendements** page, analytic solver (no Excel needed) |
 | `BankImport*.bas` (BoursoBank, LCL, ING, UBS, Revolut, Yuh, generic CSV) | Import box on the account page, with preview and **duplicate detection** |
 | Export / Import CSV with metadata row | `Exporter CSV` / import « generic » |
