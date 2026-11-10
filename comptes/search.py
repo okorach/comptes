@@ -15,6 +15,7 @@ def fold(text: str | None) -> str:
 
 
 def _date(q: dict, key: str, label: str) -> str | None:
+    """ISO date of the criterion, None when empty, ValueError when it is not a date"""
     value = (q.get(key) or "").strip()
     if not value:
         return None
@@ -25,6 +26,7 @@ def _date(q: dict, key: str, label: str) -> str | None:
 
 
 def _amount(q: dict, key: str, label: str) -> float | None:
+    """Absolute value of the amount of the criterion (comma or point as decimal separator), None when empty, ValueError when invalid"""
     value = (q.get(key) or "").strip().replace(" ", "").replace(",", ".")
     if not value:
         return None
@@ -35,6 +37,7 @@ def _amount(q: dict, key: str, label: str) -> float | None:
 
 
 def _limit(q: dict) -> int:
+    """Number of rows wanted, between 1 and MAX_ROWS"""
     try:
         return max(1, min(int(q.get("limit") or DEFAULT_ROWS), MAX_ROWS))
     except ValueError as e:

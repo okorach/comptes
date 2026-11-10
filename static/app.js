@@ -243,7 +243,8 @@ const searchColumns = (foreign, hasFx) => [
 const searchLink = t => `#/account/${enc(t.account)}/tx/${Number(t.id)}`;  // the transaction in the list of its account
 function searchRow(foreign, hasFx){
   return t => {
-    const own = foreign ? `<td class="n mut">${t.currency === MASTER ? '' : num(t.native_amount, sym(t.currency))}</td>` : '';
+    const inAccount = t.currency === MASTER ? '' : num(t.native_amount, sym(t.currency));
+    const own = foreign ? `<td class="n mut">${inAccount}</td>` : '';
     const origin = hasFx ? `<td class="n mut">${num(t.fx_amount, '')}</td><td>${esc(t.fx_currency)}</td>` : '';
     return `<tr class="click" onclick="location.hash='${searchLink(t)}'"><td>${esc(t.date)}</td><td>${esc(t.account)}</td><td class="n ${cls(t.amount_main)}">${num(t.amount_main)}</td>${own}${origin}`
       + `<td>${esc(t.description)}</td><td>${esc(t.category)}</td><td>${esc(t.subcategory)}</td><td><a href="${searchLink(t)}">voir</a></td></tr>`;
@@ -252,12 +253,12 @@ function searchRow(foreign, hasFx){
 const searchOptions = (values, current) => '<option value="">(tous)</option>' + values.map(v => `<option${v === current ? ' selected' : ''}>${esc(v)}</option>`).join('');
 async function searchPage(){
   const [m, accounts] = await Promise.all([meta(), api('accounts')]);
-  const categories = [...new Set(m.categories.map(c => c.category).filter(Boolean))].toSorted(), c = SEARCH;
+  const categories = [...new Set(m.categories.map(c => c.category).filter(Boolean))].toSorted(tableCompare), c = SEARCH;
   const field = (id, label, extra = '') => `<label>${label}<input id="s_${id}" value="${esc(c[id] ?? '')}" ${extra}></label>`;
   const select = (id, label, values) => `<label>${label}<select id="s_${id}">${searchOptions(values, c[id])}</select></label>`;
   $('#main').innerHTML = `<h2>Recherche d'écritures</h2>
   <form class="card" onsubmit="searchRun(); return false"><div class="row">${field('text', 'Texte', 'size="26" placeholder="description ou sous-catégorie"')}
-  ${select('account', 'Compte', accounts.map(a => a.id))}${select('category', 'Catégorie', categories)}${select('subcategory', 'Sous-catégorie', m.categories.map(x => x.subcategory).toSorted())}</div>
+  ${select('account', 'Compte', accounts.map(a => a.id))}${select('category', 'Catégorie', categories)}${select('subcategory', 'Sous-catégorie', m.categories.map(x => x.subcategory).toSorted(tableCompare))}</div>
   <div class="row">${field('date_from', 'Date du', 'type="date"')}${field('date_to', 'au', 'type="date"')}${field('amount_min', 'Montant de', 'size="9" inputmode="decimal"')}${field('amount_max', 'à', 'size="9" inputmode="decimal"')}
   <button class="primary" type="submit">Rechercher</button><button type="button" onclick="searchClear()">Effacer</button></div>
   <div class="mut" style="font-size:12px">Tous les critères renseignés doivent être satisfaits. Le texte cherche chaque mot (sans tenir compte des accents ni des majuscules). Le montant est en valeur absolue : en ${esc(MASTER)}, dans la devise du compte ou dans la devise d'origine.</div>
@@ -272,7 +273,7 @@ async function searchRun(){
     const query = SEARCH_CRITERIA.filter(k => SEARCH[k]).map(k => k + '=' + enc(SEARCH[k])).join('&');
     const r = await api('search?' + query);
     const foreign = r.rows.some(t => t.currency !== MASTER), hasFx = r.rows.some(t => t.fx_currency);
-    const more = r.truncated ? `<div class="mut">${r.total} écritures correspondent : les ${r.rows.length} plus récentes sont affichées, affinez la recherche.</div>` : '';
+    const more = r.truncated ? `<div class="mut">${Number(r.total)} écritures correspondent : les ${Number(r.rows.length)} plus récentes sont affichées, affinez la recherche.</div>` : '';
     $('#s_res').innerHTML = r.rows.length ? more + dataTable(searchColumns(foreign, hasFx), r.rows, searchRow(foreign, hasFx), {noun: 'écritures'}) : '<div class="mut">Aucune écriture trouvée</div>';
   } catch (e) { $('#s_err').textContent = e.message; }
 }
