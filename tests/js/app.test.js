@@ -442,6 +442,34 @@ test('the panes of the pages stack on a narrow screen: classes instead of fixed 
   assert.doesNotMatch(els['#main'].innerHTML, /min-width:\d+px/);
   const home = masterPage('EUR');
   await home.ctx.home();
-  assert.equal((home.els['#main'].innerHTML.match(/<div class="pane">/g) || []).length, 3);
+  assert.equal((home.els['#main'].innerHTML.match(/<details class="pane"/g) || []).length, 3);
   assert.doesNotMatch(home.els['#main'].innerHTML, /min-width:\d+px/);
+});
+
+test('the blocks by bank, year and type are collapsed by default, and stay as the user left them when the page is redrawn', async () => {
+  const {ctx, els} = masterPage('EUR');
+  await ctx.home();
+  const panes = html => html.match(/<details class="pane"[^>]*>/g);
+  assert.equal(panes(els['#main'].innerHTML).length, 3);
+  assert.ok(panes(els['#main'].innerHTML).every(p => !p.includes(' open')));
+  for (const title of ['Par banque', 'Par année de disponibilité', 'Par type']) assert.match(els['#main'].innerHTML, new RegExp(`<summary><h3>${title}</h3></summary>`));
+  ctx.paneToggle('bank', true);   // the user opens « Par banque »
+  await ctx.home();
+  const [bank, year, type] = panes(els['#main'].innerHTML);
+  assert.match(bank, / open /);
+  assert.ok(!year.includes(' open') && !type.includes(' open'));
+  ctx.paneToggle('bank', false);
+  await ctx.home();
+  assert.ok(panes(els['#main'].innerHTML).every(p => !p.includes(' open')));
+});
+
+test('the blocks by category and by period of the spending page are collapsible, collapsed by default', async () => {
+  const report = {categories: [{category: 'Courses', total: 10, pct: 1}], series: [{period: '2024-01', spread: 1, raw: 1, avg12: 1}], matrix: {Courses: {'2024-01': 1}}, excluded: [], all_categories: ['Courses']};
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('spending') ? report : url.includes('meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await settle();
+  await ctx.spending();
+  const html = els['#main'].innerHTML;
+  assert.match(html, /<details class="pane"[^>]*><summary><h3>Par catégorie<\/h3><\/summary><table>[\s\S]*<\/table><\/details>/);
+  assert.match(html, /<details class="pane"[^>]*><summary><h3>Par période<\/h3><\/summary><div class="scroll"[\s\S]*<\/table><\/div><\/details>/);
+  assert.doesNotMatch(html, /<details[^>]* open/);
 });

@@ -47,6 +47,11 @@ function monthlySavings(totals, months = SAVINGS_MONTHS){
   });
 }
 
+/* Collapsible blocks (<details>), collapsed by default; the ones the user opened stay open when the page is redrawn */
+const OPEN_PANES = new Set();
+const paneStart = (id, title) => `<details class="pane" ${OPEN_PANES.has(id) ? 'open' : ''} ontoggle="paneToggle('${id}', this.open)"><summary><h3>${title}</h3></summary>`;
+function paneToggle(id, open){ if (open) OPEN_PANES.add(id); else OPEN_PANES.delete(id); }
+
 /* ------------------------------------------------------------------ home */
 async function home(){
   const open = $('#openOnly') ? $('#openOnly').checked : true;
@@ -61,9 +66,9 @@ async function home(){
   ${drawChart(nw.map(p => p.month), [
     {name: `Épargne mensuelle (moy. ${SAVINGS_MONTHS} mois)`, color: 'var(--pos-light)', type: 'bar', axis: 'right', unit: sym(MASTER) + '/mois', values: monthlySavings(nw.map(p => p.total))},
     {name: 'Patrimoine', color: 'var(--acc)', type: 'line', values: nw.map(p => p.total)}], {xticks: 12, unit: sym(MASTER)})}
-  <div class="row" style="align-items:start"><div class="pane"><h3>Par banque</h3>${tbl(sumBy(a => a.bank))}</div>
-  <div class="pane"><h3>Par année de disponibilité</h3>${tbl(Object.entries(byYear).sort((a, b) => a[0] - b[0]).map(([k, v]) => [k === '0' ? 'Immédiate' : k, v]))}</div>
-  <div class="pane"><h3>Par type</h3>${tbl(sumBy(a => a.type))}</div></div>
+  <div class="row" style="align-items:start">${paneStart('bank', 'Par banque')}${tbl(sumBy(a => a.bank))}</details>
+  ${paneStart('year', 'Par année de disponibilité')}${tbl(Object.entries(byYear).sort((a, b) => a[0] - b[0]).map(([k, v]) => [k === '0' ? 'Immédiate' : k, v]))}</details>
+  ${paneStart('type', 'Par type')}${tbl(sumBy(a => a.type))}</details></div>
   <h3>Comptes</h3>${dataTable(homeColumns(), shown.sort((a, b) => b.balance_main - a.balance_main), homeRow, {noun: 'comptes'})}`;
 }
 const homeColumns = () => [
@@ -91,10 +96,10 @@ async function spending(){
   <div class="chips"><span class="mut">Catégories incluses :</span> ${chips}</div>
   <div class="mut" style="font-size:12px;margin:4px 0">Dépenses = −montant sur les comptes « en budget ». Les écritures avec un nombre N (&gt;1) dans « In Budget » sont lissées sur N mois.</div>
   ${drawChart(periods, [{name: 'Dépenses lissées', color: 'var(--acc)', type: 'bar', values: s.map(x => x.spread)}].concat(SP.group === 'month' ? [{name: 'Moyenne 12 mois', color: 'var(--neg)', type: 'line', values: s.map(x => x.avg12)}] : []), {xticks: 12, unit: sym(MASTER)})}
-  <div class="row" style="align-items:start"><div class="pane"><h3>Par catégorie</h3><table><tr><th>Catégorie</th><th class="n">Total</th><th class="n">%</th></tr>
-  ${r.categories.map(c => `<tr><td>${esc(c.category)}</td><td class="n ${cls(-c.total)}">${num(c.total)}</td><td class="n">${pct(c.pct)}</td></tr>`).join('')}</table></div>
-  <div class="pane"><h3>Par période</h3><div class="scroll" style="max-height:420px;overflow-y:auto"><table><tr><th>Période</th><th class="n">Lissées</th><th class="n">Brutes</th>${SP.group === 'month' ? '<th class="n">Moy. 12 mois</th>' : ''}</tr>
-  ${s.slice().reverse().map(x => `<tr><td>${x.period}</td><td class="n">${num(x.spread)}</td><td class="n">${num(x.raw)}</td>${SP.group === 'month' ? `<td class="n">${num(x.avg12)}</td>` : ''}</tr>`).join('')}</table></div></div></div>
+  <div class="row" style="align-items:start">${paneStart('category', 'Par catégorie')}<table><tr><th>Catégorie</th><th class="n">Total</th><th class="n">%</th></tr>
+  ${r.categories.map(c => `<tr><td>${esc(c.category)}</td><td class="n ${cls(-c.total)}">${num(c.total)}</td><td class="n">${pct(c.pct)}</td></tr>`).join('')}</table></details>
+  ${paneStart('period', 'Par période')}<div class="scroll" style="max-height:420px;overflow-y:auto"><table><tr><th>Période</th><th class="n">Lissées</th><th class="n">Brutes</th>${SP.group === 'month' ? '<th class="n">Moy. 12 mois</th>' : ''}</tr>
+  ${s.slice().reverse().map(x => `<tr><td>${x.period}</td><td class="n">${num(x.spread)}</td><td class="n">${num(x.raw)}</td>${SP.group === 'month' ? `<td class="n">${num(x.avg12)}</td>` : ''}</tr>`).join('')}</table></div></details></div>
   <h3>Catégorie × période</h3><div class="scroll"><table><tr><th>Catégorie</th>${periods.map(p => `<th class="n">${p}</th>`).join('')}</tr>
   ${cats.map(c => `<tr><td>${esc(c)}</td>${periods.map(p => `<td class="n">${r.matrix[c][p] != null ? Math.round(r.matrix[c][p]).toLocaleString('fr-FR') : ''}</td>`).join('')}</tr>`).join('')}</table></div>`;
 }
