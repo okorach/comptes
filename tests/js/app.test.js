@@ -176,7 +176,7 @@ test('transactions table shows the original amount and currency next to the amou
   await ctx.account('Suisse');
   const html = els['#main'].innerHTML;
   assert.match(html, /Montant CHF[\s\S]*Solde CHF[\s\S]*Montant d'origine[\s\S]*Devise d'origine[\s\S]*Description/);
-  const row = plain(html.match(/<tr><td>2024-01-01<\/td>.*?<\/tr>/s)[0]);
+  const row = plain(html.match(/<tr id="tx-1"><td>2024-01-01<\/td>.*?<\/tr>/s)[0]);
   assert.match(row, /-160,00[\s\S]*-160,00[\s\S]*-100,00\s*<\/td><td>USD<\/td><td>US/);
 });
 
@@ -314,4 +314,122 @@ test('a failed update of the exchange rates is shown', async () => {
   await ctx.admin();
   await ctx.refreshRates();
   assert.match(els['#fx_status'].textContent, /boom/);
+});
+
+/* ---------------------------------------------------------------- search of transactions */
+const FOUND = [
+  {id: 7, account: 'Suisse', currency: 'CHF', date: '2024-02-20', amount_main: 100, native_amount: 200, fx_currency: null, fx_amount: null, description: 'Virement <b>', subcategory: 'Paie', category: 'Salaire'},
+  {id: 8, account: 'Courant', currency: 'EUR', date: '2024-01-10', amount_main: -50, native_amount: -50, fx_currency: 'USD', fx_amount: -55, description: 'Hotel', subcategory: null, category: null},
+];
+const searchApp = (rows = FOUND, calls = []) => load(async url => {
+  calls.push(url);
+  const body = url.includes('/search') ? {rows, total: rows.length, truncated: false} : url.includes('/meta') ? {categories: [{category: 'Salaire', subcategory: 'Paie'}, {category: 'Divers', subcategory: 'Loisirs'}], currencies: ['EUR'], master_currency: 'EUR'}
+    : url.includes('accounts') ? [{id: 'Courant'}, {id: 'Suisse'}] : {};
+  return {json: async () => body};
+});
+
+test('the search page offers every criterion: text, account, category, dates and amounts', async () => {
+  const {ctx, els} = searchApp();
+  await ctx.searchPage();
+  const html = els['#main'].innerHTML;
+  for (const id of ['s_text', 's_account', 's_category', 's_subcategory', 's_date_from', 's_date_to', 's_amount_min', 's_amount_max']) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(html, /<option>Courant<\/option><option>Suisse<\/option>/);
+  assert.match(html, /id="s_category"><option value="">\(tous\)<\/option><option>Divers<\/option><option>Salaire<\/option>/);
+});
+
+test('searching sends only the filled criteria and links each result to its transaction in its account', async () => {
+  const calls = [];
+  const {ctx, els, mk} = searchApp(FOUND, calls);
+  await ctx.searchPage();
+  mk('#s_text').value = ' café ';
+  mk('#s_amount_min').value = '12,5';
+  await ctx.searchRun();
+  assert.ok(calls.includes('/api/search?text=caf%C3%A9&amount_min=12%2C5'));
+  const html = plain(els['#s_res'].innerHTML);
+  assert.match(html, /href="#\/account\/Suisse\/tx\/7">voir<\/a>/);
+  assert.match(html, /location\.hash='#\/account\/Courant\/tx\/8'/);
+  assert.match(html, /Montant du compte[\s\S]*Montant d'origine/);   // a CHF account, and an original amount
+  assert.match(html, /200,00 CHF/);
+});
+
+test('the search results escape the texts and encode the account in the link', async () => {
+  const {ctx, els} = searchApp([{...FOUND[0], account: 'A b/c', description: '<img src=x onerror=alert(1)>'}]);
+  await ctx.searchPage();
+  await ctx.searchRun();
+  const html = els['#s_res'].innerHTML;
+  assert.doesNotMatch(html, /<img/);
+  assert.match(html, /#\/account\/A%20b%2Fc\/tx\/7/);
+});
+
+test('no result, a truncated result and an error are said', async () => {
+  const empty = searchApp([]);
+  await empty.ctx.searchPage();
+  await empty.ctx.searchRun();
+  assert.match(empty.els['#s_res'].innerHTML, /Aucune écriture trouvée/);
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('/search') ? {rows: FOUND, total: 900, truncated: true} : url.includes('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await ctx.searchPage();
+  await ctx.searchRun();
+  assert.match(els['#s_res'].innerHTML, /900 écritures correspondent : les 2 plus récentes/);
+  const failing = load(async url => ({json: async () => (url.includes('/search') ? {error: 'Date de début invalide : hier'} : url.includes('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await failing.ctx.searchPage();
+  await failing.ctx.searchRun();
+  assert.equal(failing.els['#s_err'].textContent, 'Date de début invalide : hier');
+});
+
+test('coming back to the search page runs the previous search again, and clearing forgets it', async () => {
+  const calls = [];
+  const {ctx, els, mk} = searchApp(FOUND, calls);
+  await ctx.searchPage();
+  mk('#s_text').value = 'hotel';
+  await ctx.searchRun();
+  calls.length = 0;
+  await ctx.searchPage();
+  assert.ok(calls.includes('/api/search?text=hotel'));
+  assert.match(els['#main'].innerHTML, /id="s_text" value="hotel"/);
+  mk('#s_text').value = '';
+  await ctx.searchPage();   // the fields are re-created empty by the page
+  await ctx.searchClear();
+  calls.length = 0;
+  await ctx.searchPage();
+  assert.deepEqual(calls.filter(u => u.includes('/search')), []);
+});
+
+test('the route #/account/<id>/tx/<n> shows the account with transaction n highlighted and a way back to the search', async () => {
+  const calls = [];
+  const {ctx, els} = load(async url => {
+    calls.push(url);
+    return {json: async () => (url.includes('transactions') ? [{...TX, id: 1}, {...TX, id: 3, description: 'cherchée'}] : url.endsWith('/meta') ? FX_META : FX_ACCOUNT)};
+  });
+  await ctx.account('Suisse', '', 3);
+  assert.ok(calls.includes('/api/account/Suisse/transactions?limit=500&include=3'));
+  const html = els['#main'].innerHTML;
+  assert.match(html, /<tr id="tx-3" class="hl">/);
+  assert.match(html, /<tr id="tx-1"><td>/);
+  assert.match(html, /Retour à la recherche/);
+  assert.doesNotMatch(html, /Écriture introuvable/);
+});
+
+test('a transaction that no longer exists is reported, and the usual account page has no highlighted row', async () => {
+  const {ctx, els} = fxPage([TX]);
+  await ctx.account('Suisse', '', 99);
+  assert.match(els['#main'].innerHTML, /Écriture introuvable/);
+  await ctx.account('Suisse');
+  assert.doesNotMatch(els['#main'].innerHTML, /class="hl"|Retour à la recherche|include=/);
+});
+
+test('route sends #/search to the search page and #/account/<id>/tx/<n> to the account', async () => {
+  const calls = [];
+  const {ctx} = load(async url => {
+    calls.push(url);
+    return {json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? FX_META : url.includes('accounts') ? [] : FX_ACCOUNT)};
+  });
+  await settle();
+  calls.length = 0;
+  ctx.location.hash = '#/search';
+  await ctx.route();
+  assert.ok(calls.some(u => u.endsWith('/accounts')) && !calls.some(u => u.includes('transactions')));
+  calls.length = 0;
+  ctx.location.hash = '#/account/Suisse/tx/12';
+  await ctx.route();
+  assert.ok(calls.includes('/api/account/Suisse/transactions?limit=500&include=12'));
 });

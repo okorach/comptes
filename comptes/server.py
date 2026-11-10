@@ -3,7 +3,7 @@ import base64, csv, io, json, os, re, sys, mimetypes
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, unquote
 from .db import connect, DEFAULT_DB
-from . import calc, ops, budget, interest, bankimport, rates
+from . import calc, ops, budget, interest, bankimport, rates, search
 
 STATIC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 
@@ -75,6 +75,8 @@ class Handler(BaseHTTPRequestHandler):
                     "currencies": [r[0] for r in con.execute("SELECT DISTINCT currency FROM fx_rates")] + ["EUR"],
                     "master_currency": calc.master_currency(con),
                     "banks": [r[0] for r in con.execute("SELECT DISTINCT bank FROM accounts WHERE bank IS NOT NULL ORDER BY 1")]}
+        if path == "search":
+            return search.run(con, q)
         if path == "spending":
             ex = tuple(x for x in q.get("exclude", ",".join(budget.DEFAULT_EXCLUDE)).split(",") if x)
             rep = budget.report(con, q.get("group", "month"), int(q.get("months", 36)), ex)
@@ -124,11 +126,14 @@ class Handler(BaseHTTPRequestHandler):
             if sub == "transactions":
                 if m == "POST":
                     return {"id": ops.add_transaction(con, acc, self._body())}
+                limit = int(q.get("limit", 500))
+                if q.get("include"):  # the list reaches back far enough to contain this transaction (coming from the search)
+                    limit = max(limit, search.rank_in_account(con, acc, int(q["include"])))
                 rows = con.execute(
                     "SELECT id,date,amount_main,balance_main,native_amount,native_balance,description,subcategory,in_budget,qty,price,"
                     "fx_currency,fx_amount,fx_auto "
                     "FROM transactions WHERE account=? ORDER BY date DESC, id DESC LIMIT ?",
-                    (acc, int(q.get("limit", 500)))).fetchall()
+                    (acc, limit)).fetchall()
                 return [dict(r) for r in rows]
             if sub == "deposits" and m == "POST":
                 d = self._body(); ops.add_deposit(con, acc, d["date"], d["amount"]); return {"ok": True}
