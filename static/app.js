@@ -89,6 +89,7 @@ async function spending(){
   const periods = s.map(x => x.period);
   const chips = r.all_categories.concat(r.all_categories.includes('(sans catégorie)') ? [] : ['(sans catégorie)']).map(c =>
     `<label><input type="checkbox" ${r.excluded.includes(c) ? '' : 'checked'} onchange="toggleCat('${jsq(c)}',this.checked)"> ${esc(c)}</label>`).join('');
+  const avgCell = x => SP.group === 'month' ? `<td class="n">${num(x.avg12)}</td>` : '';  // 12-month average: monthly view only
   const cats = Object.keys(r.matrix).sort((a, b) => (r.categories.findIndex(x => x.category === a)) - (r.categories.findIndex(x => x.category === b)));
   $('#main').innerHTML = `<h2>Dépenses</h2>
   <div class="row"><label>Regroupement<select onchange="SP.group=this.value;spending()">${[['month', 'Mois'], ['quarter', 'Trimestre'], ['year', 'Année']].map(([v, l]) => `<option value="${v}" ${SP.group === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -99,7 +100,7 @@ async function spending(){
   <div class="row" style="align-items:start">${paneStart('category', 'Par catégorie')}<table><tr><th>Catégorie</th><th class="n">Total</th><th class="n">%</th></tr>
   ${r.categories.map(c => `<tr><td>${esc(c.category)}</td><td class="n ${cls(-c.total)}">${num(c.total)}</td><td class="n">${pct(c.pct)}</td></tr>`).join('')}</table></details>
   ${paneStart('period', 'Par période')}<div class="scroll" style="max-height:420px;overflow-y:auto"><table><tr><th>Période</th><th class="n">Lissées</th><th class="n">Brutes</th>${SP.group === 'month' ? '<th class="n">Moy. 12 mois</th>' : ''}</tr>
-  ${s.slice().reverse().map(x => `<tr><td>${x.period}</td><td class="n">${num(x.spread)}</td><td class="n">${num(x.raw)}</td>${SP.group === 'month' ? `<td class="n">${num(x.avg12)}</td>` : ''}</tr>`).join('')}</table></div></details></div>
+  ${s.slice().reverse().map(x => `<tr><td>${x.period}</td><td class="n">${num(x.spread)}</td><td class="n">${num(x.raw)}</td>${avgCell(x)}</tr>`).join('')}</table></div></details></div>
   <h3>Catégorie × période</h3><div class="scroll"><table><tr><th>Catégorie</th>${periods.map(p => `<th class="n">${p}</th>`).join('')}</tr>
   ${cats.map(c => `<tr><td>${esc(c)}</td>${periods.map(p => `<td class="n">${r.matrix[c][p] != null ? Math.round(r.matrix[c][p]).toLocaleString('fr-FR') : ''}</td>`).join('')}</tr>`).join('')}</table></div>`;
 }
@@ -194,11 +195,14 @@ async function account(id, msg = '', focus = null){
   const subOpts = '<option value=""></option>' + m.categories.map(c => `<option>${esc(c.subcategory)}</option>`).join('');
   const fields = modeFields(a, m, cur);
   const importBanks = ['BoursoBank', 'ING', 'LCL', 'UBS', 'Revolut', 'Yuh', 'generic'];
+  const bankOptions = importBanks.map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('');
+  const importer = a.mode === 'flow' || a.mode === 'static'  // only the accounts that take amounts can import them
+    ? `<label class="inline">Importer <select id="imp_bank">${bankOptions}</select><input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : '';
   $('#main').innerHTML = `<h2>${esc(a.id)} <span class="mut" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
   <div class="row">${focus ? '<button onclick="location.hash=\'#/search\'">← Retour à la recherche</button>' : '<button onclick="location.hash=\'#/\'">← Retour</button>'}
   <button onclick="setStatus('${jsq(a.id)}','${a.status === 'Open' ? 'Closed' : 'Open'}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
   <a href="/api/account/${enc(a.id)}/export.csv"><button>Exporter CSV</button></a>
-  ${a.mode === 'flow' || a.mode === 'static' ? `<label class="inline">Importer <select id="imp_bank">${importBanks.map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('')}</select><input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : ''}</div>
+  ${importer}</div>
   <div id="imp"></div><div class="ok">${esc(msg)}</div>
   <div class="card"><b id="form_title">Nouvelle écriture</b><div class="row"><label>Date<input type="date" id="f_date" value="${new Date().toISOString().slice(0, 10)}"></label>${fields}
   <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
