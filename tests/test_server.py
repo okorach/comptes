@@ -111,14 +111,19 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.call("GET", "/api/search?date_from=hier")["HTTP"], 400)
         self.call("DELETE", f"/api/transaction/{tid}")
 
-    def test_account_transactions_reach_back_to_the_requested_one(self):
+    def test_account_transactions_are_all_returned_unless_a_limit_is_asked(self):
         acc = "/api/account/Courant"
-        total = len(self.call("GET", acc + "/transactions?limit=100000"))
-        tid = self.call("POST", acc + "/transactions", {"date": "2000-01-01", "native_amount": "1", "description": "Tout premier"})["id"]
-        self.assertNotIn(tid, [r["id"] for r in self.call("GET", acc + "/transactions?limit=1")])
-        reached = self.call("GET", acc + f"/transactions?limit=1&include={tid}")
-        self.assertEqual((tid in [r["id"] for r in reached], len(reached)), (True, total + 1))
-        self.call("DELETE", f"/api/transaction/{tid}")
+        before = len(self.call("GET", acc + "/transactions"))
+        self.con.executemany("INSERT INTO transactions(account,date,native_amount,description) VALUES('Courant',?,0,'bulk')",
+                             [(f"1990-01-{1 + i % 28:02d}",) for i in range(600)])   # more than the old limit of 500
+        self.con.commit()
+        try:
+            self.assertEqual(len(self.call("GET", acc + "/transactions")), before + 600)
+            self.assertEqual(len(self.call("GET", acc + "/transactions?limit=10")), 10)
+            self.assertEqual(self.call("GET", acc + "/transactions")[-1]["description"], "bulk")   # the oldest ones are there too
+        finally:
+            self.con.execute("DELETE FROM transactions WHERE description='bulk'")
+            self.con.commit()
 
     def test_import_preview(self):
         csv = "d;a;b;c\n2024-03-01;x;SHOP;-3,10\n".encode()
