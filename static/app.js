@@ -147,8 +147,8 @@ const ICONS = {
 const iconButton = (icon, label, onclick) => `<button class="icon" title="${label}" aria-label="${label}" onclick="${onclick}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[icon]}</svg></button>`;
 let FOCUS = null;  // transaction to show (highlighted) in the account page: the one found by the search
 /* Accounts whose transactions are shown without the « Montant » columns (the balance is what matters, the amounts are the movements of the market) */
-const NO_AMOUNT_TYPES = ['Assurance Vie', 'PER', 'PERCO', 'PEA', 'Actions', 'PEE', 'Investment'];
-const showsAmount = a => !NO_AMOUNT_TYPES.includes(a.type);
+const NO_AMOUNT_TYPES = new Set(['Assurance Vie', 'PER', 'PERCO', 'PEA', 'Actions', 'PEE', 'Investment']);
+const showsAmount = a => !NO_AMOUNT_TYPES.has(a.type);
 function txRow(t, foreign, aid, hasFx = false, amounts = true){
   const nativeAmount = foreign && amounts ? `<td class="n mut">${num(t.native_amount, '')}</td>` : '';
   const native = foreign ? nativeAmount + `<td class="n mut">${num(t.native_balance, '')}</td>` : '';
