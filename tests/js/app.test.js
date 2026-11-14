@@ -630,3 +630,14 @@ test('in a foreign currency, both the Montant columns are hidden and the balance
   await other.ctx.account('X');
   assert.deepEqual(heads(other.els['#main'].innerHTML), ['Date', 'Montant €', 'Solde €', 'Montant CHF', 'Solde CHF', 'Description', 'Sous-cat.']);
 });
+
+test('the transaction rows have a pen and a trash icon instead of the words modifier and suppr.', async () => {
+  const {ctx, els} = typedPage('Courant');
+  await ctx.account('X');
+  const row = els['#main'].innerHTML.match(/<tr id="tx-1">.*?<\/tr>/s)[0];
+  assert.doesNotMatch(row, />modifier<|>suppr\.</);
+  const buttons = [...row.matchAll(/<button class="icon" title="([^"]+)" aria-label="([^"]+)" onclick="([^"]+)"><svg.*?<\/svg><\/button>/gs)];
+  assert.deepEqual(buttons.map(b => [b[1], b[2]]), [['Modifier', 'Modifier'], ['Supprimer', 'Supprimer']]);
+  assert.match(buttons[0][3], /^editTx\(/);
+  assert.equal(buttons[1][3], "delTx(1,'Suisse')");
+});

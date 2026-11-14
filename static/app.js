@@ -139,6 +139,12 @@ async function recalc(){
 }
 
 /* ------------------------------------------------------------------ account */
+/* Small line icons (24x24, drawn with the colour of the text) for the buttons of the rows */
+const ICONS = {
+  pen: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  trash: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>',
+};
+const iconButton = (icon, label, onclick) => `<button class="icon" title="${label}" aria-label="${label}" onclick="${onclick}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[icon]}</svg></button>`;
 let FOCUS = null;  // transaction to show (highlighted) in the account page: the one found by the search
 /* Accounts whose transactions are shown without the « Montant » columns (the balance is what matters, the amounts are the movements of the market) */
 const NO_AMOUNT_TYPES = ['Assurance Vie', 'PER', 'PERCO', 'PEA', 'Actions', 'PEE', 'Investment'];
@@ -148,9 +154,10 @@ function txRow(t, foreign, aid, hasFx = false, amounts = true){
   const native = foreign ? nativeAmount + `<td class="n mut">${num(t.native_balance, '')}</td>` : '';
   const amount = amounts ? `<td class="n ${cls(t.amount_main)}">${num(t.amount_main)}</td>` : '';
   const origin = hasFx ? `<td class="n mut">${num(t.fx_amount, '')}</td><td>${esc(t.fx_currency)}</td>` : '';
+  const edit = `editTx(${esc(JSON.stringify(t))})`, del = `delTx(${Number(t.id)},'${jsq(aid)}')`;
   const budget = t.in_budget ? ` <span class="mut">(${esc(t.in_budget)})</span>` : '';
   return `<tr id="tx-${Number(t.id)}"${t.id === FOCUS ? ' class="hl"' : ''}><td>${esc(t.date)}</td>${amount}<td class="n">${num(t.balance_main)}</td>${native}${origin}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
-  <td><button class="link" onclick="editTx(${esc(JSON.stringify(t))})">modifier</button><button class="link" onclick="delTx(${Number(t.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
+  <td class="s actions">${iconButton('pen', 'Modifier', edit)}${iconButton('trash', 'Supprimer', del)}</td></tr>`;
 }
 const NATIVE_KEY = {y1: 'n1', y3: 'n3', y5: 'n5', y8: 'n8', y_all: 'n_all'};
 const INTEREST_PERIODS = [['1 an', 'y1'], ['3 ans', 'y3'], ['5 ans', 'y5'], ['8 ans', 'y8'], ['Depuis le début', 'y_all']];
