@@ -1,7 +1,7 @@
 // Small SVG chart helpers. Vertical axis always uses "nice" round tick values (e.g. 0, 200k, 400k).
 function niceStep(range, target){
   const raw = range / Math.max(1, target), mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag;
-  const m = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
+  const m = [1, 2, 2.5, 5].find(x => f <= x) ?? 10;   // first of 1, 2, 2.5, 5 not below the raw step, else 10
   return m * mag;
 }
 function niceTicks(min, max, target = 5){
@@ -9,7 +9,7 @@ function niceTicks(min, max, target = 5){
   const step = niceStep(max - min, target);
   const lo = Math.floor(min / step + 1e-9) * step, hi = Math.ceil(max / step - 1e-9) * step, t = [];
   for (let v = lo; v <= hi + step * 1e-9; v += step) t.push(Math.round(v / step) * step);
-  return {ticks: t, lo: t[0], hi: t[t.length - 1], step};
+  return {ticks: t, lo: t[0], hi: t.at(-1), step};
 }
 function fmtTick(v, step){
   const a = Math.abs(v);

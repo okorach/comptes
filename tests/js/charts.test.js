@@ -213,3 +213,13 @@ test('a chart scrolls sideways on a narrow screen: the plot and its sliders scro
   assert.ok(scroll);
   assert.match(scroll[1], /chart-plot-\d+[\s\S]*chart-range/);
 });
+
+test('niceStep keeps its steps at the edges (1, 2, 2.5, 5 then 10) and niceTicks ends on its last tick', () => {
+  assert.equal(ctx.niceStep(5, 5), 1);      // raw step 1
+  assert.equal(ctx.niceStep(10, 5), 2);
+  assert.equal(ctx.niceStep(12.5, 5), 2.5);
+  assert.equal(ctx.niceStep(25, 5), 5);
+  assert.equal(ctx.niceStep(26, 5), 10);    // above 5: 10
+  const t = ctx.niceTicks(0, 100, 5);
+  assert.equal(t.hi, t.ticks[t.ticks.length - 1]);
+});

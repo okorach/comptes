@@ -16,10 +16,10 @@ const num = (v, cur = sym(MASTER)) => v == null ? '' : cents(v).toLocaleString('
 const pct = v => v == null ? '–' : (v * 100).toLocaleString('fr-FR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + ' %';
 const cls = v => cents(v) < 0 ? 'neg' : '';
 const sym = c => ({EUR: '€', CHF: 'CHF', USD: '$', GBP: '£'}[c] || c);
-async function api(path, method = 'GET', body){
-  const r = await fetch('/api/' + path, {method, headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
+async function api(path, method, body){
+  const r = await fetch('/api/' + path, {method: method ?? 'GET', headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
   const j = await r.json();
-  if (j && j.error) throw new Error(j.error);
+  if (j?.error) throw new Error(j.error);
   return j;
 }
 let META = null;
@@ -70,7 +70,8 @@ async function home(){
   const shown = acc.filter(a => !open || a.status === 'Open');
   const total = shown.reduce((s, a) => s + a.balance_main, 0);
   const sumBy = f => { const o = {}; shown.forEach(a => { const k = f(a) || '–'; o[k] = (o[k] || 0) + a.balance_main; }); return Object.entries(o).sort((a, b) => b[1] - a[1]); };
-  const tbl = rows => `<table>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="n ${cls(v)}">${num(v)}</td></tr>`).join('')}</table>`;
+  const kvRow = ([k, v]) => `<tr><td>${esc(k)}</td><td class="n ${cls(v)}">${num(v)}</td></tr>`;
+  const tbl = rows => '<table>' + rows.map(kvRow).join('') + '</table>';
   const byYear = {}; shown.forEach(a => { const k = a.availability || 0; byYear[k] = (byYear[k] || 0) + a.balance_main; });
   $('#main').innerHTML = `<div class="mut">Patrimoine</div><div class="big">${num(total)}</div>
   ${drawChart(nw.map(p => p.month), [
@@ -115,7 +116,7 @@ const homeRow = a => `<tr class="click${a.status === 'Closed' ? ' closed' : ''}"
 /* ------------------------------------------------------------------ spending */
 let SP = {group: 'month', months: 36, exclude: null};
 async function spending(){
-  const m = await meta();
+  await meta();
   const q = `spending?group=${SP.group}&months=${SP.months}` + (SP.exclude ? `&exclude=${enc(SP.exclude.join(','))}` : '');
   const r = await api(q);
   SP.exclude = r.excluded;
@@ -124,6 +125,8 @@ async function spending(){
   const chips = r.all_categories.concat(r.all_categories.includes('(sans catégorie)') ? [] : ['(sans catégorie)']).map(c =>
     `<label><input type="checkbox" ${r.excluded.includes(c) ? '' : 'checked'} onchange="toggleCat('${jsq(c)}',this.checked)"> <span class="d">${esc(c)}</span></label>`).join('');
   const avgCell = x => SP.group === 'month' ? `<td class="n">${num(x.avg12)}</td>` : '';  // 12-month average: monthly view only
+  const matrixCell = v => '<td class="n">' + (v == null ? '' : Math.round(v).toLocaleString('fr-FR')) + '</td>';
+  const matrixRow = c => '<tr><td>' + esc(c) + '</td>' + periods.map(p => matrixCell(r.matrix[c][p])).join('') + '</tr>';
   const cats = Object.keys(r.matrix).sort((a, b) => (r.categories.findIndex(x => x.category === a)) - (r.categories.findIndex(x => x.category === b)));
   $('#main').innerHTML = `<h2>Dépenses</h2>
   <div class="row"><label>Regroupement<select onchange="SP.group=this.value;spending()">${[['month', 'Mois'], ['quarter', 'Trimestre'], ['year', 'Année']].map(([v, l]) => `<option value="${v}" ${SP.group === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -136,11 +139,13 @@ async function spending(){
   ${paneStart('period', 'Par période')}<div class="scroll" style="max-height:420px;overflow-y:auto"><table><tr><th>Période</th><th class="n">Lissées</th><th class="n">Brutes</th>${SP.group === 'month' ? '<th class="n">Moy. 12 mois</th>' : ''}</tr>
   ${s.slice().reverse().map(x => `<tr><td>${x.period}</td><td class="n">${num(x.spread)}</td><td class="n">${num(x.raw)}</td>${avgCell(x)}</tr>`).join('')}</table></div></details></div>
   <h3>Catégorie × période</h3><div class="scroll"><table><tr><th>Catégorie</th>${periods.map(p => `<th class="n d">${p}</th>`).join('')}</tr>
-  ${cats.map(c => `<tr><td>${esc(c)}</td>${periods.map(p => `<td class="n">${r.matrix[c][p] != null ? Math.round(r.matrix[c][p]).toLocaleString('fr-FR') : ''}</td>`).join('')}</tr>`).join('')}</table></div>`;
+  ${cats.map(matrixRow).join('')}</table></div>`;
 }
 function toggleCat(c, included){
   const set = new Set(SP.exclude || []); included ? set.delete(c) : set.add(c);
-  SP.exclude = [...set]; if (!SP.exclude.length) SP.exclude = ['']; void spending();
+  SP.exclude = [...set];
+  if (!SP.exclude.length) SP.exclude = [''];
+  void spending();
 }
 
 /* ------------------------------------------------------------------ interests */
@@ -359,14 +364,23 @@ async function searchRun(){
 
 /* import */
 let IMPORT = null;
-function b64(buf){ let s = ''; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); }
+function b64(buf){
+  let s = '';
+  const b = new Uint8Array(buf);
+  for (let i = 0; i < b.length; i += 0x8000) {
+    s += String.fromCodePoint.apply(null, b.subarray(i, i + 0x8000));   // by chunks: too many arguments otherwise
+  }
+  return btoa(s);
+}
 async function importPreview(id){
   const f = $('#imp_file').files[0]; if (!f) return;
   IMPORT = {filename: f.name, data: b64(await f.arrayBuffer()), bank: $('#imp_bank').value};
   try {
     const r = await api('account/' + enc(id) + '/import', 'POST', IMPORT);
+    const previewRow = p => `<tr><td>${p.date}</td><td class="n ${cls(p.amount)}">${num(p.amount)}</td><td>${esc(p.description)}</td></tr>`;
+    const preview = r.new.slice(0, 200).map(previewRow).join('');
     $('#imp').innerHTML = `<div class="card"><b>Import de ${esc(f.name)}</b> : ${r.new.length} nouvelle(s) écriture(s), ${r.duplicates} doublon(s) ignoré(s).
-    ${r.new.length ? `<div class="scroll" style="max-height:240px;overflow-y:auto"><table>${r.new.slice(0, 200).map(p => `<tr><td>${p.date}</td><td class="n ${cls(p.amount)}">${num(p.amount)}</td><td>${esc(p.description)}</td></tr>`).join('')}</table></div>
+    ${r.new.length ? `<div class="scroll" style="max-height:240px;overflow-y:auto"><table>${preview}</table></div>
     <button class="primary" onclick="importCommit('${jsq(id)}')">Importer ${r.new.length} écritures</button>` : ''}<button onclick="$('#imp').innerHTML=''">Fermer</button></div>`;
   } catch (e) { $('#imp').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
@@ -375,7 +389,6 @@ async function importCommit(id){ const r = await api('account/' + enc(id) + '/im
 /* ------------------------------------------------------------------ admin */
 async function admin(msg = ''){
   const m = await meta();
-  const fx = await api('fx?currency=CHF');
   $('#main').innerHTML = `<h2>Administration</h2><div class="ok">${esc(msg)}</div>
   <div class="card"><b>Nouveau compte</b><div class="row">
   <label>Nom<input id="n_id" size="22"></label><label>N° de compte<input id="n_nbr" size="16"></label>
@@ -415,7 +428,8 @@ async function refreshRates(){
 }
 async function fxList(){
   const cur = $('#x_cur').value, rows = await api('fx?currency=' + cur);
-  $('#fxl').innerHTML = `<table>${rows.slice(0, 12).map(r => `<tr><td>${r.date}</td><td class="n">${r.rate}</td></tr>`).join('')}</table>`;
+  const fxRow = r => `<tr><td>${r.date}</td><td class="n">${r.rate}</td></tr>`;
+  $('#fxl').innerHTML = '<table>' + rows.slice(0, 12).map(fxRow).join('') + '</table>';
 }
 async function addFx(){ try { await api('fx', 'POST', {currency: $('#x_cur').value, date: $('#x_date').value, rate: $('#x_rate').value.replace(',', '.')}); await fxList(); } catch (e) { await errorDialog(e.message); } }
 async function createAcc(){
@@ -426,4 +440,4 @@ async function createAcc(){
     location.hash = '#/account/' + enc(v('n_id').trim());
   } catch (e) { $('#n_err').textContent = e.message.includes('UNIQUE') ? 'Ce compte existe déjà' : e.message; }
 }
-void route();
+window.addEventListener('DOMContentLoaded', route);   // first page, once the document is there
