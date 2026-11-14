@@ -545,3 +545,28 @@ test('the blocks by bank, year and type are below the accounts table', async () 
   assert.ok(at('<h3>Comptes</h3>') > 0 && at('<h3>Comptes</h3>') < at('Par banque') && at('Par banque') < at('Par année de disponibilité') && at('Par année de disponibilité') < at('Par type'));
   assert.ok(at('</table>') < at('Par banque') || at('</tfoot>') < at('Par banque'));
 });
+
+test('an amount that rounds to zero is shown as 0, never -0, and is not negative', () => {
+  const {get} = load(), num = get('num'), cls = get('cls');
+  assert.equal(plain(num(-0.004)), '0,00 €');
+  assert.equal(plain(num(-1e-12)), '0,00 €');
+  assert.equal(plain(num(-0)), '0,00 €');
+  assert.equal(plain(num(-0.006)), '-0,01 €');
+  assert.equal(cls(-0.004), '');
+  assert.equal(cls(-0.006), 'neg');
+});
+
+test('closed accounts have a grey row, and a balance that is never red nor -0', async () => {
+  const acc = (id, status, balance_main) => ({id, status, type: 'Courant', bank: 'B', availability: 0, last_date: todayIso(), currency: 'EUR', balance_main, balance_native: balance_main});
+  const {ctx, els, mk} = masterPage('EUR', {accounts: [acc('Ouvert', 'Open', -5), acc('Ferme0', 'Closed', -1e-10), acc('FermeNeg', 'Closed', -3)]});
+  mk('#openOnly').checked = false;   // « comptes ouverts seulement » unticked
+  await ctx.home();
+  const rows = plain(els['#main'].innerHTML).match(/<tr class="click[^"]*".*?<\/tr>/gs);
+  const row = id => rows.find(r => r.includes(`>${id}</td>`));
+  assert.match(row('Ouvert'), /^<tr class="click"/);
+  assert.match(row('Ouvert'), /<td class="n neg">-5,00 €<\/td>/);
+  assert.match(row('Ferme0'), /^<tr class="click closed"/);
+  assert.match(row('Ferme0'), /<td class="n ">0,00 €<\/td>/);
+  assert.doesNotMatch(row('Ferme0'), /-0/);
+  assert.doesNotMatch(row('FermeNeg'), /neg/);   // never red on a closed account
+});

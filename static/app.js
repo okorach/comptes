@@ -1,9 +1,11 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let MASTER = 'EUR';  // master currency of the application: totals, balances and yields of all the accounts are in it
-const num = (v, cur = sym(MASTER)) => v == null ? '' : v.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + esc(cur);
+/* An amount that rounds to 0 is shown as 0, never as -0 (and not as negative: see cls) */
+const cents = v => Math.round(v * 100) / 100 === 0 ? 0 : v;
+const num = (v, cur = sym(MASTER)) => v == null ? '' : cents(v).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + esc(cur);
 const pct = v => v == null ? '–' : (v * 100).toLocaleString('fr-FR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + ' %';
-const cls = v => v < 0 ? 'neg' : '';
+const cls = v => cents(v) < 0 ? 'neg' : '';
 const sym = c => ({EUR: '€', CHF: 'CHF', USD: '$', GBP: '£'}[c] || c);
 async function api(path, method = 'GET', body){
   const r = await fetch('/api/' + path, {method, headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
@@ -91,7 +93,7 @@ function homeTotal(rows){
   const total = rows.reduce((t, a) => t + a.balance_main, 0);
   return `<tr class="total"><td class="s">Total</td><td class="n ${cls(total)}">${num(total)}</td><td></td><td></td><td></td></tr>`;
 }
-const homeRow = a => `<tr class="click" onclick="location.hash='#/account/${enc(a.id)}'"><td class="${lateness(a)}" title="${esc(availabilityText(a))}">${esc(a.id)}</td><td class="n ${cls(a.balance_main)}">${num(a.balance_main)}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td></tr>`;
+const homeRow = a => `<tr class="click${a.status === 'Closed' ? ' closed' : ''}" onclick="location.hash='#/account/${enc(a.id)}'"><td class="${lateness(a)}" title="${esc(availabilityText(a))}">${esc(a.id)}</td><td class="n ${a.status === 'Closed' ? '' : cls(a.balance_main)}">${num(a.balance_main)}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td></tr>`;
 
 /* ------------------------------------------------------------------ spending */
 let SP = {group: 'month', months: 36, exclude: null};
