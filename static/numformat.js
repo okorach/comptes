@@ -11,13 +11,20 @@ function setNumberFormat(format){
   NUMBER_FORMAT.thousands = thousands === decimal ? '' : thousands;
 }
 
+/* The digits of an integer by groups of three, from the right ("1234567" -> "1 234 567") */
+function groupDigits(digits, separator){
+  const groups = [];
+  for (let end = digits.length; end > 0; end -= 3) groups.unshift(digits.slice(Math.max(0, end - 3), end));
+  return groups.join(separator);
+}
+
 /* v with between min and max decimals, the thousands grouped. `format` is the current one unless given (preview). */
 function formatNumber(v, min = 0, max = min, format = NUMBER_FORMAT){
   const plain = v.toLocaleString('en-US', {minimumFractionDigits: min, maximumFractionDigits: max, useGrouping: false});   // -1234.5
   const [whole, fraction] = plain.split('.');
   const sign = whole.startsWith('-') ? '-' : '';
   const digits = sign ? whole.slice(1) : whole;
-  const grouped = format.thousands === '' ? digits : digits.replace(/\B(?=(\d{3})+$)/g, () => format.thousands);
+  const grouped = groupDigits(digits, format.thousands);
   return sign + grouped + (fraction ? format.decimal + fraction : '');
 }
 
