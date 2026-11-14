@@ -834,7 +834,7 @@ test('the yields table has no « Calculé le » column', async () => {
 test('an open account with no balance for more than 3 months has an orange bubble, more than 1 year a red one, with the last update in the tooltip', () => {
   const {get} = load(), bubble = get('staleBubble'), today = new Date(2024, 5, 15);   // 2024-06-15
   const dot = (last_date, status = 'Open') => bubble({status, last_date}, today);
-  const tip = date => `title="Dernière mise à jour: ${date}" aria-label="Dernière mise à jour: ${date}"`;
+  const tip = date => `title="Dernière mise à jour du solde: ${date}" aria-label="Dernière mise à jour du solde: ${date}"`;
   assert.equal(dot('2023-06-14'), `<span class="stale-dot" role="img" ${tip('2023-06-14')}></span>`);          // red: more than 1 year
   assert.match(dot('2020-01-01T10:00:00'), /^<span class="stale-dot" /);
   assert.equal(dot('2023-06-15'), `<span class="stale-dot warn" role="img" ${tip('2023-06-15')}></span>`);    // exactly 1 year: orange, not red
@@ -842,7 +842,7 @@ test('an open account with no balance for more than 3 months has an orange bubbl
   assert.equal(dot('2024-03-15'), '');     // exactly 3 months: not more
   assert.equal(dot('2024-06-01'), '');
   assert.equal(dot('2020-01-01', 'Closed'), '');   // a closed account is not flagged
-  assert.match(dot(null), /^<span class="stale-dot" [^>]*title="Dernière mise à jour: –"/);   // never any transaction: red
+  assert.match(dot(null), /^<span class="stale-dot" [^>]*title="Dernière mise à jour du solde: –"/);   // never any transaction: red
 });
 
 test('the bubble is shown next to the account name in the overview and in the yields page, and does not change the name', async () => {
@@ -851,11 +851,11 @@ test('the bubble is shown next to the account name in the overview and in the yi
     {id: 'Frais', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: todayIso(), currency: 'EUR', balance_main: 1, balance_native: 1}];
   const {ctx, els} = masterPage('EUR', {accounts});
   await ctx.home();
-  assert.match(els['#main'].innerHTML, /Vieux<span class="stale-dot" role="img" title="Dernière mise à jour: 2020-03-04"/);
+  assert.match(els['#main'].innerHTML, /Vieux<span class="stale-dot" role="img" title="Dernière mise à jour du solde: 2020-03-04"/);
   assert.doesNotMatch(els['#main'].innerHTML, /Frais<span/);
   const page = load(async url => ({json: async () => (url.includes('interests') ? [yieldRow('Vieux', todayIso() + 'T09:00:00', 'Open', old), yieldRow('Frais', todayIso() + 'T09:00:00')] : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
   await page.ctx.interests();
-  assert.match(page.els['#main'].innerHTML, /Vieux<span class="stale-dot"[^>]*title="Dernière mise à jour: 2020-03-04"/);
+  assert.match(page.els['#main'].innerHTML, /Vieux<span class="stale-dot"[^>]*title="Dernière mise à jour du solde: 2020-03-04"/);
   assert.doesNotMatch(page.els['#main'].innerHTML, /Frais<span/);
 });
 
@@ -864,7 +864,7 @@ test('the orange bubble is shown in the overview and in the yields page', async 
   const last = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const {ctx, els} = masterPage('EUR', {accounts: [{id: 'Lent', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: last, currency: 'EUR', balance_main: 1, balance_native: 1}]});
   await ctx.home();
-  assert.match(els['#main'].innerHTML, new RegExp(`Lent<span class="stale-dot warn" role="img" title="Dernière mise à jour: ${last}"`));
+  assert.match(els['#main'].innerHTML, new RegExp(`Lent<span class="stale-dot warn" role="img" title="Dernière mise à jour du solde: ${last}"`));
   const page = load(async url => ({json: async () => (url.includes('interests') ? [yieldRow('Lent', todayIso() + 'T09:00:00', 'Open', last)] : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
   await page.ctx.interests();
   assert.match(page.els['#main'].innerHTML, /Lent<span class="stale-dot warn"/);
@@ -882,7 +882,7 @@ test('the names of the accounts are not coloured any more: only the bubbles flag
   const fresh = todayIso(0) + 'T09:00:00', old1 = yieldRow('Lent', fresh, 'Open', old), page = load(async url => ({json: async () => (url.includes('interests') ? [old1, yieldRow('Recent', fresh)] : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
   await page.ctx.interests();
   const html = page.els['#main'].innerHTML;
-  assert.match(html, /<td>Lent<span class="stale-dot warn" role="img" title="Dernière mise à jour: [\d-]+"/);
+  assert.match(html, /<td>Lent<span class="stale-dot warn" role="img" title="Dernière mise à jour du solde: [\d-]+"/);
   assert.match(html, /<td>Recent<\/td>/);
   assert.doesNotMatch(html, /late-[13]|Calculé le/);
 });
@@ -914,7 +914,7 @@ test('the yields page shows the bubbles of the yields not recalculated, next to 
   const both = load(async url => ({json: async () => (url.includes('interests') ? [yieldRow('Double', day(40) + 'T09:00:00', 'Open', '2020-01-01')] : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
   await both.ctx.interests();
   const titles = [...both.els['#main'].innerHTML.match(/<td>Double(.*?)<\/td>/)[1].matchAll(/title="([^"]+)"/g)].map(m => m[1]);
-  assert.deepEqual(titles, ['Dernière mise à jour: 2020-01-01', `Dernière mise à jour des rendements: ${day(40)}`]);
+  assert.deepEqual(titles, ['Dernière mise à jour du solde: 2020-01-01', `Dernière mise à jour des rendements: ${day(40)}`]);
 });
 
 test('the overview has no bubble for the yields', async () => {

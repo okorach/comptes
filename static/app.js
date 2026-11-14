@@ -85,7 +85,7 @@ function staleBubble(a, today = new Date()){
   if (a.status !== 'Open') return '';
   const last = a.last_date ? a.last_date.slice(0, 10) : null;   // no last date: never any transaction, the worst case
   if (last && last >= daysAgo(today, d => d.setMonth(d.getMonth() - 3))) return '';
-  return bubble(last !== null && last >= daysAgo(today, d => d.setFullYear(d.getFullYear() - 1)), 'Dernière mise à jour: ' + (last ?? '–'));
+  return bubble(last !== null && last >= daysAgo(today, d => d.setFullYear(d.getFullYear() - 1)), 'Dernière mise à jour du solde: ' + (last ?? '–'));
 }
 /* Open account whose yields were not recalculated for more than 1 month (red) or more than 15 days (orange) */
 function calcBubble(r, today = new Date()){
