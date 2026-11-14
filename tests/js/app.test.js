@@ -240,7 +240,9 @@ test('only the accounts that are not in the master currency show their balance i
   const {ctx, els} = masterPage('CHF');
   await ctx.home();
   const rows = plain(els['#main'].innerHTML).match(/<tr class="click".*?<\/tr>/gs);
-  assert.match(rows.find(r => r.includes('Courant')), /100,00 €<\/td><td class="n ">200,00 CHF/);   // EUR account: native balance shown
+  assert.match(rows.find(r => r.includes('Courant')), /200,00 CHF<\/td><td class="n mut">100,00 €<\/td>/);   // EUR account: native balance shown, after the balance in the master currency
+  const heads = [...els['#main'].innerHTML.match(/<table class="data"><thead><tr>(.*?)<\/tr>/s)[1].matchAll(/<th[^>]*>([^<]*?)(?: <button|<\/th>)/g)].map(m => m[1]);
+  assert.deepEqual(heads, ['Compte', 'Solde CHF', 'Solde (devise)', 'Type', 'Banque']);
   assert.doesNotMatch(rows.find(r => r.includes('Suisse')), /<td class="n mut">[^<\s]/);                // CHF account: it is the master currency
 });
 

@@ -72,8 +72,8 @@ async function home(){
   <h3>Comptes</h3>${dataTable(homeColumns(), shown.sort((a, b) => b.balance_main - a.balance_main), homeRow, {noun: 'comptes'})}`;
 }
 const homeColumns = () => [
-  {label: 'Compte', value: a => a.id}, {label: 'Type', value: a => a.type}, {label: 'Banque', value: a => a.bank},
-  {label: 'Solde (devise)', num: true, value: a => a.currency === MASTER ? null : a.balance_native}, {label: 'Solde ' + sym(MASTER), num: true, value: a => a.balance_main},
+  {label: 'Compte', value: a => a.id}, {label: 'Solde ' + sym(MASTER), num: true, value: a => a.balance_main},
+  {label: 'Solde (devise)', num: true, value: a => a.currency === MASTER ? null : a.balance_native}, {label: 'Type', value: a => a.type}, {label: 'Banque', value: a => a.bank},
 ];
 /* Open account whose last transaction is more than 3 months old ('late-3', red) or more than 1 month old ('late-1', orange) */
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -86,7 +86,7 @@ function lateness(a, today = new Date()){
 }
 /* Shown when hovering on the name of the account (replaces the old columns): availability, and last update when it is late */
 const availabilityText = a => 'Disponibilité: ' + (a.availability || 'Immédiate') + (lateness(a) ? '\nDernière mise à jour: ' + a.last_date.slice(0, 10) : '');
-const homeRow = a => `<tr class="click" onclick="location.hash='#/account/${enc(a.id)}'"><td class="${lateness(a)}" title="${esc(availabilityText(a))}">${esc(a.id)}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td class="n ${cls(a.balance_main)}">${num(a.balance_main)}</td></tr>`;
+const homeRow = a => `<tr class="click" onclick="location.hash='#/account/${enc(a.id)}'"><td class="${lateness(a)}" title="${esc(availabilityText(a))}">${esc(a.id)}</td><td class="n ${cls(a.balance_main)}">${num(a.balance_main)}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td></tr>`;
 
 /* ------------------------------------------------------------------ spending */
 let SP = {group: 'month', months: 36, exclude: null};
