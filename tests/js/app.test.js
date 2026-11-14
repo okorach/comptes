@@ -971,3 +971,17 @@ test('unticking and ticking a category of the spending page keeps at least an em
   await settle();
   assert.ok(calls.some(u => /exclude=(&|$)/.test(u)));   // nothing excluded: an empty list, not the default exclusion
 });
+
+test('a yield that rounds to 0.0 % is shown as 0.0 %, never -0.0 %, and is not red', () => {
+  const {get} = load(), pct = get('pct'), rateHtml = get('rateHtml');
+  get('setNumberFormat')({decimal: '.', thousands: ' '});
+  for (const v of [-0.0000001, -0.0004, -0, 0, 0.0004]) assert.equal(plain(pct(v)), '0.0 %', String(v));
+  assert.equal(plain(pct(-0.0006)), '-0.1 %');      // rounds to -0.1: still negative
+  assert.equal(plain(pct(0.123)), '12.3 %');
+  assert.equal(pct(null), '–');
+  assert.doesNotMatch(rateHtml(-0.0001, null, 'EUR'), /neg/);
+  assert.match(rateHtml(-0.0006, null, 'EUR'), /<span class="neg">-0\.1 %<\/span>/);
+  assert.doesNotMatch(rateHtml(0.05, -0.0001, 'CHF'), /neg/);                    // the yield in the currency of the account too
+  assert.match(plain(rateHtml(0.05, -0.0001, 'CHF')), /0\.0 % CHF<\/small>/);
+  assert.match(rateHtml(0.05, -0.02, 'CHF'), /native-rate mut neg/);
+});
