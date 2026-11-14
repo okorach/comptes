@@ -12,6 +12,17 @@ function makeElement() {
   };
 }
 
+// Like a DOM node: the text set as textContent is read back, HTML escaped, as innerHTML
+function makeTextNode() {
+  const node = makeElement();
+  let text = '';
+  Object.defineProperty(node, 'textContent', {
+    get: () => text,
+    set: v => { text = String(v); node.innerHTML = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); },
+  });
+  return node;
+}
+
 function load(fetchImpl) {
   const els = {}, listeners = {};
   const mk = id => els[id] || (els[id] = makeElement());
@@ -20,7 +31,7 @@ function load(fetchImpl) {
     encodeURIComponent, decodeURIComponent,
     btoa: s => Buffer.from(s, 'binary').toString('base64'),
     fetch: fetchImpl || (async () => ({json: async () => ({})})),
-    document: {querySelector: mk, querySelectorAll: () => [], createElement: () => makeElement()},
+    document: {querySelector: mk, querySelectorAll: () => [], createElement: makeTextNode},
     location: {hash: ''}, window: {addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); }, scrollTo() {}}, confirm: () => true, alert: m => { throw new Error('alert: ' + m); },
   };
   vm.createContext(ctx);
