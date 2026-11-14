@@ -126,7 +126,7 @@ async function spending(){
   const chips = r.all_categories.concat(r.all_categories.includes('(sans catégorie)') ? [] : ['(sans catégorie)']).map(c =>
     `<label><input type="checkbox" ${r.excluded.includes(c) ? '' : 'checked'} onchange="toggleCat('${jsq(c)}',this.checked)"> <span class="d">${esc(c)}</span></label>`).join('');
   const avgCell = x => SP.group === 'month' ? `<td class="n">${num(x.avg12)}</td>` : '';  // 12-month average: monthly view only
-  const matrixCell = v => '<td class="n">' + (v == null ? '' : formatNumber(Math.round(v))) + '</td>';
+  const matrixCell = v => '<td class="n">' + (v == null ? '' : formatNumber(cents(v), 2)) + '</td>';
   const matrixRow = c => '<tr><td>' + esc(c) + '</td>' + periods.map(p => matrixCell(r.matrix[c][p])).join('') + '</tr>';
   const cats = Object.keys(r.matrix).sort((a, b) => (r.categories.findIndex(x => x.category === a)) - (r.categories.findIndex(x => x.category === b)));
   $('#main').innerHTML = `<h2>Dépenses</h2>

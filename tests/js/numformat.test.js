@@ -81,7 +81,7 @@ test('the page applies the format sent by the server, and the spending matrix an
     : url.includes('meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR', number_format: {decimal: '.', thousands: "'"}} : [])}));
   await new Promise(r => setTimeout(r, 10));
   await ctx.spending();
-  assert.match(els['#main'].innerHTML, /<td class="n">1'234'567<\/td>/);
+  assert.match(els['#main'].innerHTML, /<td class="n">1'234'567\.40<\/td>/);
   mk('#x_cur').value = 'CHF';
   await ctx.fxList();
   assert.match(els['#fxl'].innerHTML, /<td class="n">0\.934567<\/td>/);
