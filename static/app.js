@@ -188,11 +188,15 @@ function depositRow(d, aid){
   const del = `delDep(${Number(d.id)},'${jsq(aid)}')`;
   return `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_main)}</td><td class="s actions">${iconButton('trash', 'Supprimer', del)}</td></tr>`;
 }
-function depositsPanel(info, a, cur){
+/* Yields: next to the transactions (before them when the panes are stacked) */
+function yieldsPanel(info, a){
   return `<div class="pane pane-side"><h3>Rendements nets</h3>${interestsTable(info.interests, a.currency)}
-  <button onclick="recalcOne('${jsq(a.id)}')">Recalculer</button>
-  <h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
-  <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;
+  <button onclick="recalcOne('${jsq(a.id)}')">Recalculer</button></div>`;
+}
+/* Deposits: always at the bottom of the page, after the transactions */
+function depositsPanel(info, a, cur){
+  return `<h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
+  <div class="scroll" style="max-height:340px;max-width:460px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div>`;
 }
 const txColumns = (foreign, cur, hasFx, amounts = true) => [
   {label: 'Date', value: t => t.date}, ...(amounts ? [{label: 'Montant ' + sym(MASTER), num: true, value: t => t.amount_main}] : []), {label: 'Solde ' + sym(MASTER), num: true, value: t => t.balance_main},
@@ -238,7 +242,8 @@ async function account(id, msg = '', focus = null){
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
   <div class="row" style="align-items:start"><div class="pane pane-wide">${dataTable(txColumns(foreign, sym(a.currency), hasFx, showsAmount(a)), tr, t => txRow(t, foreign, a.id, hasFx, showsAmount(a)), {noun: 'écritures (les plus récentes)'})}</div>
-  ${hasDep ? depositsPanel(info, a, cur) : ''}</div>`;
+  ${hasDep ? yieldsPanel(info, a) : ''}</div>
+  ${hasDep ? depositsPanel(info, a, cur) : ''}`;
   EDIT = null;
   $('#tx-' + focus)?.scrollIntoView?.({block: 'center'});
 }
