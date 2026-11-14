@@ -665,100 +665,167 @@ test('account page layout: transactions, yields and deposits are the areas of a 
   assert.match(css, /@media\(max-width:840px\)\{\.account-grid:not\(\.solo\)\{[^}]*grid-template-areas:"yields" "tx" "deposits"/);   // stacked
 });
 
-/* ---------------------------------------------------------------- guards of the destructive operations */
-const guardedPage = (calls = [], balance = 0) => load(async (url, init) => {
+/* ---------------------------------------------------------------- guards of the destructive operations (modal windows) */
+const guardedPage = (calls = [], balance = 0, failPut = null) => load(async (url, init) => {
   calls.push({url, method: init?.method || 'GET'});
-  return {json: async () => (url.endsWith('/accounts') ? [{id: 'Livret A', currency: 'EUR', status: 'Open', balance_main: balance, balance_native: balance}] : url.includes('transactions') ? [] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR'}
+  if (init?.method === 'PUT' && failPut) return {json: async () => ({error: failPut})};
+  return {json: async () => (url.endsWith('/accounts') ? [{id: 'Livret A', currency: 'EUR', status: 'Open', balance_main: balance, balance_native: balance}] : url.includes('transactions') ? []
+    : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR'}
     : {account: {id: 'Livret A', type: 'Livret A', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []})};
 });
 const writes = calls => calls.filter(c => c.method !== 'GET').map(c => c.method + ' ' + c.url);
+const shown = els => (els['#guard'] || {innerHTML: ''}).innerHTML;
+const tick = () => new Promise(r => setTimeout(r, 0));
 
-test('closing an account asks for its name; nothing is closed until it is typed exactly', async () => {
-  const calls = [];
-  const {ctx, els, mk, get} = guardedPage(calls), guardCheck = get('guardCheck');
+test('the closing button asks to close the account', async () => {
+  const {ctx, els} = guardedPage();
   await ctx.account('Livret A');
   assert.match(els['#main'].innerHTML, /onclick="askCloseAccount\('Livret A'\)">Clôturer le compte/);
-  await ctx.askCloseAccount('Livret A');
-  const dialog = els['#guard'].innerHTML;
-  assert.match(dialog, /role="dialog"[\s\S]*saisissez le nom du compte : <b class="d">Livret A<\/b>/);
-  assert.match(dialog, /id="g_ok" type="submit" disabled/);                 // the button waits for the name
-  mk('#g_ok').disabled = true;
-  for (const typed of ['', 'livret a', 'Livret', 'Livret A ']) {
-    mk('#g_name').value = typed;
-    guardCheck('Livret A');
-    assert.equal(mk('#g_ok').disabled, true, `"${typed}"`);
-    await ctx.closeAccount('Livret A');                                       // even a forced submit does nothing
-    assert.deepEqual(writes(calls), []);
-  }
-  mk('#g_name').value = 'Livret A';
-  guardCheck('Livret A');
-  assert.equal(mk('#g_ok').disabled, false);
-  await ctx.closeAccount('Livret A');
-  assert.deepEqual(writes(calls), ['PUT /api/account/Livret%20A']);
-  assert.equal(els['#guard'].innerHTML, '');                                  // the window is closed
 });
 
-test('cancelling the closing window closes nothing; reopening an account needs no confirmation', async () => {
+test('closing an account opens a window asking for its name; nothing is closed until it is typed exactly', async () => {
+  const calls = [];
+  const {ctx, els, mk, get} = guardedPage(calls);
+  await ctx.account('Livret A');
+  const done = ctx.askCloseAccount('Livret A');
+  await tick();
+  const html = shown(els);
+  assert.match(html, /role="alertdialog"[\s\S]*<h2 id="m_title">Clôturer le compte \?<\/h2>[\s\S]*<div class="modal-name d">Livret A<\/div>[\s\S]*id="m_input"/);
+  assert.match(html, /<button type="submit" class="danger" id="m_ok" disabled>Clôturer le compte<\/button>/);   // the button waits for the name
+  for (const typed of ['', 'livret a', 'Livret', 'Livret A ']) {
+    mk('#m_input').value = typed;
+    get('modalCheck')();
+    assert.equal(mk('#m_ok').disabled, true, `"${typed}"`);
+    get('modalDone')(true);                                                       // even a forced answer does nothing
+    assert.notEqual(shown(els), '', `"${typed}"`);
+    assert.deepEqual(writes(calls), []);
+  }
+  mk('#m_input').value = 'Livret A';
+  get('modalCheck')();
+  assert.equal(mk('#m_ok').disabled, false);
+  get('modalDone')(true);
+  await done;
+  assert.deepEqual(writes(calls), ['PUT /api/account/Livret%20A']);
+  assert.equal(shown(els), '');                                                  // the window is closed
+});
+
+test('cancelling the closing window (button or click outside) closes nothing', async () => {
   const calls = [];
   const {ctx, els, get} = guardedPage(calls);
   await ctx.account('Livret A');
-  await ctx.askCloseAccount('Livret A');
-  get('guardClose')();
-  assert.equal(els['#guard'].innerHTML, '');
+  const done = ctx.askCloseAccount('Livret A');
+  await tick();
+  assert.match(shown(els), /id="m_cancel" onclick="modalDone\(false\)">Annuler/);
+  assert.match(shown(els), /onclick="if \(event\.target === this\) modalDone\(false\)"/);   // click outside the window
+  get('modalDone')(false);
+  await done;
+  assert.equal(shown(els), '');
   assert.deepEqual(writes(calls), []);
+});
+
+test('Escape cancels the window', async () => {
+  const {els, get, listeners} = guardedPage();
+  const answer = get('confirmDialog')({title: 'T', message: 'M'});
+  await tick();
+  assert.notEqual(shown(els), '');
+  listeners.keydown.forEach(f => f({key: 'Enter'}));          // another key: nothing
+  assert.notEqual(shown(els), '');
+  listeners.keydown.forEach(f => f({key: 'Escape'}));
+  assert.equal(await answer, false);
+  assert.equal(shown(els), '');
+});
+
+test('reopening an account needs no confirmation', async () => {
+  const calls = [];
+  const {ctx, els, get} = guardedPage(calls);
+  await ctx.account('Livret A');
   await get('reopenAccount')('Livret A');
   assert.deepEqual(writes(calls), ['PUT /api/account/Livret%20A']);
+  assert.equal(shown(els), '');
 });
 
-test('the name of the account is escaped in the closing window', async () => {
-  const {ctx, els} = guardedPage();
-  await ctx.askCloseAccount('<img src=x onerror=alert(1)>');
-  assert.doesNotMatch(els['#guard'].innerHTML, /<img/);
+test('the texts of a modal window are escaped', async () => {
+  const {els, get} = guardedPage();
+  get('confirmDialog')({title: '<b>t</b>', message: '<img src=x onerror=alert(1)>', strong: '<i>nom</i>', require: 'x', inputLabel: '"><script>'});
+  await tick();
+  assert.doesNotMatch(shown(els), /<img|<i>|<b>t|<script/);
 });
 
-test('deleting a transaction or a deposit asks for a confirmation, and does nothing when it is refused', async () => {
-  for (const [fn, expected] of [['delTx', 'DELETE /api/transaction/7'], ['delDep', 'DELETE /api/deposit/7']]) {
+test('an account whose balance is not zero cannot be closed: an error window is shown instead of the confirmation', async () => {
+  for (const balance of [612.15, -3, 0.01]) {
+    const calls = [];
+    const {ctx, els, get} = guardedPage(calls, balance);
+    await ctx.account('Livret A');
+    const done = ctx.askCloseAccount('Livret A');
+    await tick();
+    const html = plain(shown(els));
+    assert.match(html, /<h2 id="m_title">Clôture impossible<\/h2><p id="m_msg">Ce compte ne peut pas être clôturé : son solde n'est pas nul \(/, String(balance));
+    assert.doesNotMatch(html, /m_input/);
+    assert.match(html, /<button type="button" class="primary" id="m_ok" onclick="modalDone\(true\)">Fermer<\/button>/);
+    get('modalDone')(true);
+    await done;
+    assert.equal(shown(els), '');
+    assert.deepEqual(writes(calls), []);
+  }
+  const {ctx, els, get} = guardedPage([], 612.15);
+  await ctx.account('Livret A');
+  const done = ctx.askCloseAccount('Livret A');
+  await tick();
+  assert.match(plain(shown(els)), /\(612,15 €\)\./);
+  get('modalDone')(true);
+  await done;
+});
+
+test('a balance that rounds to zero does not prevent the closing', async () => {
+  const {ctx, els, get} = guardedPage([], 0.001);
+  await ctx.account('Livret A');
+  const done = ctx.askCloseAccount('Livret A');
+  await tick();
+  assert.match(shown(els), /id="m_input"/);
+  get('modalDone')(false);
+  await done;
+});
+
+test('a refusal of the server at the closing is shown in an error window', async () => {
+  const {ctx, els, mk, get} = guardedPage([], 0, "Impossible de clôturer X : son solde n'est pas nul (5,00 EUR)");
+  await ctx.account('Livret A');
+  const done = ctx.askCloseAccount('Livret A');
+  await tick();
+  mk('#m_input').value = 'Livret A';
+  get('modalDone')(true);
+  await tick(); await tick();
+  assert.match(shown(els), /<h2 id="m_title">Clôture impossible<\/h2>[\s\S]*solde n'est pas nul \(5,00 EUR\)/);
+  get('modalDone')(true);
+  await done;
+  assert.equal(shown(els), '');
+});
+
+test('deleting a transaction or a deposit opens a confirmation window, and does nothing when it is refused', async () => {
+  for (const [fn, expected, title] of [['delTx', 'DELETE /api/transaction/7', "Supprimer l'écriture ?"], ['delDep', 'DELETE /api/deposit/7', 'Supprimer le versement ?']]) {
     for (const answer of [false, true]) {
-      const calls = [], asked = [];
-      const {ctx} = guardedPage(calls);
-      ctx.confirm = message => { asked.push(message); return answer; };
-      await ctx[fn](7, 'Livret A');
-      assert.equal(asked.length, 1, fn);
+      const calls = [];
+      const {ctx, els, get} = guardedPage(calls);
+      const done = ctx[fn](7, 'Livret A');
+      await tick();
+      assert.match(shown(els), new RegExp(`<h2 id="m_title">${title.replace('?', '\\?')}</h2>[\\s\\S]*class="danger" id="m_ok">Supprimer</button>`), fn);
+      assert.deepEqual(writes(calls), [], fn);                     // nothing happens before the answer
+      get('modalDone')(answer);
+      await done;
+      assert.equal(shown(els), '');
       assert.deepEqual(writes(calls), answer ? [expected] : [], `${fn} ${answer}`);
     }
   }
 });
 
-test('an account whose balance is not zero cannot be closed: an error is shown instead of the confirmation window', async () => {
-  for (const balance of [612.15, -3, 0.01]) {
-    const calls = [];
-    const {ctx, els, mk} = guardedPage(calls, balance);
-    await ctx.account('Livret A');
-    await ctx.askCloseAccount('Livret A');
-    assert.equal(mk('#guard').innerHTML, '', String(balance));
-    assert.match(plain(els['#close_err'].textContent), /^Impossible de clôturer ce compte : son solde n'est pas nul \(/);
-    assert.deepEqual(writes(calls), []);
+test('the other error messages (deposit, exchange rate) are error windows, not browser alerts', async () => {
+  const {ctx, els, mk, get} = load(async (url, init) => ({json: async () => (init?.method === 'POST' ? {error: 'Date invalide'} : {})}));
+  for (const [run, message] of [[() => ctx.addDep('Livret A'), 'Date invalide'], [() => ctx.addFx(), 'Date invalide']]) {
+    mk('#x_rate').value = '1,2';
+    const done = run();
+    await tick();
+    assert.match(shown(els), new RegExp(`<h2 id="m_title">Erreur</h2><p id="m_msg">${message}</p>`));
+    get('modalDone')(true);
+    await done;
+    assert.equal(shown(els), '');
   }
-  const {ctx, els} = guardedPage([], 612.15);
-  await ctx.account('Livret A');
-  await ctx.askCloseAccount('Livret A');
-  assert.match(plain(els['#close_err'].textContent), /\(612,15 €\)\.$/);
-});
-
-test('a balance that rounds to zero does not prevent the closing, and an earlier error is cleared', async () => {
-  const {ctx, mk} = guardedPage([], 0.001);
-  await ctx.account('Livret A');
-  mk('#close_err').textContent = 'old';
-  await ctx.askCloseAccount('Livret A');
-  assert.equal(mk('#close_err').textContent, '');
-  assert.match(mk('#guard').innerHTML, /role="dialog"/);
-});
-
-test('a refusal of the server at the closing is shown', async () => {
-  const {ctx, els, mk} = load(async (url, init) => ({json: async () => (init?.method === 'PUT' ? {error: "Impossible de clôturer X : son solde n'est pas nul (5,00 EUR)"} : url.endsWith('/accounts') ? [{id: 'X', currency: 'EUR', balance_main: 0, balance_native: 0}] : {})}));
-  await ctx.askCloseAccount('X');
-  mk('#g_name').value = 'X';
-  await ctx.closeAccount('X');
-  assert.match(els['#close_err'].textContent, /solde n'est pas nul/);
-  assert.equal(els['#guard'].innerHTML, '');
 });

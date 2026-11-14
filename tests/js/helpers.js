@@ -13,7 +13,7 @@ function makeElement() {
 }
 
 function load(fetchImpl) {
-  const els = {};
+  const els = {}, listeners = {};
   const mk = id => els[id] || (els[id] = makeElement());
   const ctx = {
     console, URL, setTimeout, Uint8Array, Math, Number, Set, Object, JSON, Date, Array, String, RegExp, Error,
@@ -21,16 +21,16 @@ function load(fetchImpl) {
     btoa: s => Buffer.from(s, 'binary').toString('base64'),
     fetch: fetchImpl || (async () => ({json: async () => ({})})),
     document: {querySelector: mk, querySelectorAll: () => [], createElement: () => makeElement()},
-    location: {hash: ''}, window: {addEventListener() {}, scrollTo() {}}, confirm: () => true, alert: m => { throw new Error('alert: ' + m); },
+    location: {hash: ''}, window: {addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); }, scrollTo() {}}, confirm: () => true, alert: m => { throw new Error('alert: ' + m); },
   };
   vm.createContext(ctx);
-  for (const f of ['charts.js', 'tables.js', 'app.js']) {
+  for (const f of ['charts.js', 'tables.js', 'modal.js', 'app.js']) {
     const file = path.join(STATIC, f);
     vm.runInContext(fs.readFileSync(file, 'utf8') + ';', ctx, {filename: file});
   }
   // `const` declarations are not properties of the context: expose them through a lookup helper
   const get = name => vm.runInContext(name, ctx);
-  return {ctx, els, mk, get};
+  return {ctx, els, mk, get, listeners};
 }
 
 module.exports = {load, plain};
