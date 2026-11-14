@@ -74,12 +74,6 @@ class SearchTest(UsdDatabaseCase):
             with self.subTest(criteria=criteria), self.assertRaises(ValueError):
                 search.run(self.con, criteria)
 
-    def test_rank_in_account_tells_how_far_back_to_load(self):
-        ids = {r["description"]: r["id"] for r in search.run(self.con, {})["rows"]}
-        self.assertEqual(search.rank_in_account(self.con, "Courant", ids["Cinéma"]), 1)
-        self.assertEqual(search.rank_in_account(self.con, "Courant", ids["Café de l'Été"]), 4)
-        self.assertEqual(search.rank_in_account(self.con, "Suisse", ids["Cinéma"]), 0)   # not in this account
-
 
 if __name__ == "__main__":
     unittest.main()

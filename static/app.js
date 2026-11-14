@@ -219,7 +219,7 @@ const fxFields = (a, m) => {
 let EDIT = null;
 async function account(id, msg = '', focus = null){
   FOCUS = focus;
-  const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions?limit=500' + (focus ? '&include=' + Number(focus) : '')), meta()]);
+  const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions'), meta()]);
   if (focus && !tr.some(t => t.id === focus)) msg = 'Écriture introuvable (supprimée ?)';
   const a = info.account, cur = esc(sym(a.currency)), foreign = a.currency !== MASTER;
   const hasDep = !['Courant', 'Autres', null].includes(a.type);
@@ -241,7 +241,7 @@ async function account(id, msg = '', focus = null){
   <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
-  <div class="account-grid ${hasDep ? '' : 'solo'}"><div class="g-tx">${dataTable(txColumns(foreign, sym(a.currency), hasFx, showsAmount(a)), tr, t => txRow(t, foreign, a.id, hasFx, showsAmount(a)), {noun: 'écritures (les plus récentes)'})}</div>
+  <div class="account-grid ${hasDep ? '' : 'solo'}"><div class="g-tx">${dataTable(txColumns(foreign, sym(a.currency), hasFx, showsAmount(a)), tr, t => txRow(t, foreign, a.id, hasFx, showsAmount(a)), {noun: 'écritures'})}</div>
   ${hasDep ? yieldsPanel(info, a) + depositsPanel(info, a, cur) : ''}</div>`;
   EDIT = null;
   $('#tx-' + focus)?.scrollIntoView?.({block: 'center'});

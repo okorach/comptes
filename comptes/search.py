@@ -103,12 +103,3 @@ def run(con: sqlite3.Connection, q: dict) -> dict:
         "SELECT t.id,t.account,t.date,t.amount_main,t.native_amount,a.currency,t.fx_currency,t.fx_amount,t.description,t.subcategory,c.category "
         f"{source}{clause} ORDER BY t.date DESC, t.id DESC LIMIT ?", [*args, limit]).fetchall()
     return {"rows": [dict(r) for r in rows], "total": total, "truncated": total > len(rows)}
-
-
-def rank_in_account(con: sqlite3.Connection, account: str, tid: int) -> int:
-    """Position of the transaction in the list of its account, the most recent first (1 = the latest): how many rows to load to reach it"""
-    row = con.execute("SELECT date FROM transactions WHERE id=? AND account=?", (tid, account)).fetchone()
-    if not row:
-        return 0
-    return con.execute("SELECT COUNT(*) FROM transactions WHERE account=? AND (date>? OR (date=? AND id>=?))",
-                       (account, row[0], row[0], tid)).fetchone()[0]

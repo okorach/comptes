@@ -403,7 +403,7 @@ test('the route #/account/<id>/tx/<n> shows the account with transaction n highl
     return {json: async () => (url.includes('transactions') ? [{...TX, id: 1}, {...TX, id: 3, description: 'cherchée'}] : url.endsWith('/meta') ? FX_META : FX_ACCOUNT)};
   });
   await ctx.account('Suisse', '', 3);
-  assert.ok(calls.includes('/api/account/Suisse/transactions?limit=500&include=3'));
+  assert.ok(calls.includes('/api/account/Suisse/transactions'));
   const html = els['#main'].innerHTML;
   assert.match(html, /<tr id="tx-3" class="hl">/);
   assert.match(html, /<tr id="tx-1"><td>/);
@@ -416,7 +416,7 @@ test('a transaction that no longer exists is reported, and the usual account pag
   await ctx.account('Suisse', '', 99);
   assert.match(els['#main'].innerHTML, /Écriture introuvable/);
   await ctx.account('Suisse');
-  assert.doesNotMatch(els['#main'].innerHTML, /class="hl"|Retour à la recherche|include=/);
+  assert.doesNotMatch(els['#main'].innerHTML, /class="hl"|Retour à la recherche|limit=/);
 });
 
 test('route sends #/search to the search page and #/account/<id>/tx/<n> to the account', async () => {
@@ -433,7 +433,7 @@ test('route sends #/search to the search page and #/account/<id>/tx/<n> to the a
   calls.length = 0;
   ctx.location.hash = '#/account/Suisse/tx/12';
   await ctx.route();
-  assert.ok(calls.includes('/api/account/Suisse/transactions?limit=500&include=12'));
+  assert.ok(calls.includes('/api/account/Suisse/transactions'));
 });
 
 /* ---------------------------------------------------------------- responsive layout */
@@ -828,4 +828,19 @@ test('the other error messages (deposit, exchange rate) are error windows, not b
     await done;
     assert.equal(shown(els), '');
   }
+});
+
+test('the account page asks for all the transactions, not only the latest ones', async () => {
+  const calls = [];
+  const {ctx, els} = load(async url => {
+    calls.push(url);
+    return {json: async () => (url.includes('transactions') ? Array.from({length: 1200}, (_, i) => ({...TX, id: i + 1, description: 'n' + i})) : url.endsWith('/meta') ? FX_META : FX_ACCOUNT)};
+  });
+  await ctx.account('Suisse');
+  assert.ok(calls.includes('/api/account/Suisse/transactions'));
+  assert.ok(!calls.some(u => u.includes('limit')));
+  const html = els['#main'].innerHTML;
+  assert.match(html, /1200 écritures<\/div>/);
+  assert.equal((html.match(/<tr id="tx-/g) || []).length, 1200);
+  assert.doesNotMatch(html, /plus récentes/);
 });

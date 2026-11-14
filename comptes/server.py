@@ -126,9 +126,7 @@ class Handler(BaseHTTPRequestHandler):
             if sub == "transactions":
                 if m == "POST":
                     return {"id": ops.add_transaction(con, acc, self._body())}
-                limit = int(q.get("limit", 500))
-                if q.get("include"):  # the list reaches back far enough to contain this transaction (coming from the search)
-                    limit = max(limit, search.rank_in_account(con, acc, int(q["include"])))
+                limit = int(q["limit"]) if q.get("limit") else -1   # all the transactions unless a limit is asked (-1: no limit in SQLite)
                 rows = con.execute(
                     "SELECT id,date,amount_main,balance_main,native_amount,native_balance,description,subcategory,in_budget,qty,price,"
                     "fx_currency,fx_amount,fx_auto "
