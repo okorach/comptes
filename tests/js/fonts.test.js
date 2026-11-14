@@ -38,3 +38,13 @@ test('names that come from the data are marked as dynamic, fixed labels of table
 test('the icons of a transaction row stay on one line', () => {
   assert.match(read('style.css'), /td\.actions\{[^}]*white-space:nowrap/);
 });
+
+test('the yield in the currency of the account is displayed below the one in the master currency', () => {
+  assert.match(read('style.css'), /\.native-rate\{display:block\}/);
+});
+
+test('the bubbles of the accounts without recent balance are red, orange for the less late ones', () => {
+  const css = read('style.css');
+  assert.match(css, /\.stale-dot\{[^}]*background:var\(--neg\)/);
+  assert.match(css, /\.stale-dot\.warn\{background:var\(--warn\)\}/);
+});

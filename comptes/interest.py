@@ -127,6 +127,21 @@ def has_interests(acc_type):
     return acc_type not in ("Courant", "Autres", None)
 
 
+def recalc_outdated(con: sqlite3.Connection, now: dt.datetime | None = None) -> int:
+    """Recomputes the yields of the open accounts that have some (whatever their type) and whose last computation is not of today
+    (or that were never computed), so that they are always up to date when shown. Returns the number of accounts recomputed."""
+    now = now or dt.datetime.now()
+    today = now.date().isoformat()
+    done = {r["account"]: (r["calc_date"] or "")[:10] for r in con.execute("SELECT account,calc_date FROM interests")}
+    n = 0
+    for a in con.execute("SELECT id,type FROM accounts WHERE status='Open'").fetchall():
+        if has_interests(a["type"]) and done.get(a["id"]) != today:
+            recalc(con, a["id"], now)
+            n += 1
+    con.commit()
+    return n
+
+
 def recalc_all(con, force=False, now=None):
     n = 0
     for a in con.execute("SELECT id,type,status FROM accounts WHERE status='Open'").fetchall():

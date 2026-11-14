@@ -131,13 +131,13 @@ test('the right axis of the home chart starts at 0 when the savings are floored 
   assert.ok(labels.every(l => !l.startsWith('-')));
 });
 
-test('rateHtml shows the yield in EUR followed by the yield in the account currency', () => {
+test('rateHtml shows the yield in EUR with the yield in the account currency below it', () => {
   const rateHtml = load().get('rateHtml');
   const eur = plain(rateHtml(0.123, 0.041, 'CHF'));
-  assert.match(eur, /12,3 %<\/span> <small class="mut " title="[^"]*CHF[^"]*">4,1 % CHF<\/small>/);
+  assert.match(eur, /12,3 %<\/span><small class="native-rate mut" title="[^"]*CHF[^"]*">4,1 % CHF<\/small>/);
   assert.doesNotMatch(plain(rateHtml(0.123, 0.041, 'EUR')), /small/);
   assert.doesNotMatch(plain(rateHtml(0.123, null, 'CHF')), /small/);
-  assert.match(plain(rateHtml(0.05, -0.02, 'USD')), /<small class="mut neg"/);
+  assert.match(plain(rateHtml(0.05, -0.02, 'USD')), /<small class="native-rate mut neg"/);
   assert.match(rateHtml(null, 0.1, 'CHF'), /–/);
 });
 
@@ -478,41 +478,17 @@ test('the blocks by category and by period of the spending page are collapsible,
 
 const todayIso = (monthsAgo = 0) => { const d = new Date(); d.setMonth(d.getMonth() - monthsAgo); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-test('availability and last date are no longer columns: they show when hovering on the name of the account', async () => {
+test('availability and last date are no longer columns: the availability shows when hovering on the name of the account', async () => {
   const {ctx, els} = masterPage('EUR', {accounts: [
     {id: 'PER', status: 'Open', type: 'Livret', bank: 'B', availability: 2035, last_date: todayIso(), currency: 'EUR', balance_main: 10, balance_native: 10},
     {id: 'Courant', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: todayIso(), currency: 'EUR', balance_main: 5, balance_native: 5}]});
   await ctx.home();
   const html = els['#main'].innerHTML;
   assert.doesNotMatch(html, /Dispo\.|Dernière date/);
-  assert.match(html, /<td class="" title="Disponibilité: 2035">PER<\/td>/);
-  assert.match(html, /<td class="" title="Disponibilité: Immédiate">Courant<\/td>/);
-  const row = html.match(/<tr class="click"[^>]*><td class="" title="Disponibilité: 2035">.*?<\/tr>/s)[0];
+  assert.match(html, /<td title="Disponibilité: 2035">PER<\/td>/);
+  assert.match(html, /<td title="Disponibilité: Immédiate">Courant<\/td>/);
+  const row = html.match(/<tr class="click"[^>]*><td title="Disponibilité: 2035">.*?<\/tr>/s)[0];
   assert.equal((row.match(/<td/g) || []).length, 5);   // name, type, bank, native balance, balance
-});
-
-test('an open account not updated for more than 3 months is red, more than 1 month orange, else normal', () => {
-  const {ctx} = load();
-  const today = new Date(2024, 5, 15);   // 2024-06-15
-  const level = (last_date, status = 'Open') => ctx.lateness({status, last_date}, today);
-  assert.equal(level('2024-03-14'), 'late-3');
-  assert.equal(level('2024-03-15'), 'late-1');    // exactly 3 months: not more
-  assert.equal(level('2024-05-14'), 'late-1');
-  assert.equal(level('2024-05-15'), '');          // exactly 1 month: not more
-  assert.equal(level('2024-06-10'), '');
-  assert.equal(level('2023-01-01', 'Closed'), '');   // a closed account is not late
-  assert.equal(level(null), '');
-});
-
-test('a late account name is coloured and its tooltip adds the last update', async () => {
-  const old = todayIso(5), mid = todayIso(2), fresh = todayIso(0);
-  const acc = (id, last_date) => ({id, status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date, currency: 'EUR', balance_main: 5, balance_native: 5});
-  const {ctx, els} = masterPage('EUR', {accounts: [acc('Rouge', old), acc('Orange', mid), acc('Frais', fresh)]});
-  await ctx.home();
-  const html = els['#main'].innerHTML;
-  assert.match(html, new RegExp(`<td class="late-3" title="Disponibilité: Immédiate\nDernière mise à jour: ${old}">Rouge</td>`));
-  assert.match(html, new RegExp(`<td class="late-1" title="Disponibilité: Immédiate\nDernière mise à jour: ${mid}">Orange</td>`));
-  assert.match(html, /<td class="" title="Disponibilité: Immédiate">Frais<\/td>/);
 });
 
 test('the accounts table is filterable by type and bank only, and sortable on every column', async () => {
@@ -843,4 +819,106 @@ test('the account page asks for all the transactions, not only the latest ones',
   assert.match(html, /1200 écritures<\/div>/);
   assert.equal((html.match(/<tr id="tx-/g) || []).length, 1200);
   assert.doesNotMatch(html, /plus récentes/);
+});
+
+const yieldRow = (account, calc_date, status = 'Open', last_date = todayIso()) => ({account, type: 'Livret', status, currency: 'EUR', calc_date, last_date, y1: 0.02, n1: null, y3: null, n3: null, y5: null, n5: null, y8: null, n8: null, y_all: null, n_all: null});
+
+test('the yields table has no « Calculé le » column', async () => {
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('interests') ? [yieldRow('A', todayIso())] : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await ctx.interests();
+  const html = els['#main'].innerHTML;
+  assert.doesNotMatch(html, /Calculé le<|Trier par Calculé le|Filtrer Calculé le/);
+  assert.equal((html.match(/<thead><tr>(.*?)<\/tr>/s)[1].match(/<th[ >]/g) || []).length, 7);   // Compte, Type and the five periods
+});
+
+test('an open account with no balance for more than 3 months has an orange bubble, more than 1 year a red one, with the last update in the tooltip', () => {
+  const {get} = load(), bubble = get('staleBubble'), today = new Date(2024, 5, 15);   // 2024-06-15
+  const dot = (last_date, status = 'Open') => bubble({status, last_date}, today);
+  const tip = date => `title="Dernière mise à jour du solde: ${date}" aria-label="Dernière mise à jour du solde: ${date}"`;
+  assert.equal(dot('2023-06-14'), `<span class="stale-dot" role="img" ${tip('2023-06-14')}></span>`);          // red: more than 1 year
+  assert.match(dot('2020-01-01T10:00:00'), /^<span class="stale-dot" /);
+  assert.equal(dot('2023-06-15'), `<span class="stale-dot warn" role="img" ${tip('2023-06-15')}></span>`);    // exactly 1 year: orange, not red
+  assert.equal(dot('2024-03-14'), `<span class="stale-dot warn" role="img" ${tip('2024-03-14')}></span>`);    // orange: more than 3 months
+  assert.equal(dot('2024-03-15'), '');     // exactly 3 months: not more
+  assert.equal(dot('2024-06-01'), '');
+  assert.equal(dot('2020-01-01', 'Closed'), '');   // a closed account is not flagged
+  assert.match(dot(null), /^<span class="stale-dot" [^>]*title="Dernière mise à jour du solde: –"/);   // never any transaction: red
+});
+
+test('the bubble is shown next to the account name in the overview and in the yields page, and does not change the name', async () => {
+  const old = '2020-03-04', accounts = [
+    {id: 'Vieux', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: old, currency: 'EUR', balance_main: 1, balance_native: 1},
+    {id: 'Frais', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: todayIso(), currency: 'EUR', balance_main: 1, balance_native: 1}];
+  const {ctx, els} = masterPage('EUR', {accounts});
+  await ctx.home();
+  assert.match(els['#main'].innerHTML, /Vieux<span class="stale-dot" role="img" title="Dernière mise à jour du solde: 2020-03-04"/);
+  assert.doesNotMatch(els['#main'].innerHTML, /Frais<span/);
+  const page = load(async url => ({json: async () => (url.includes('interests') ? [yieldRow('Vieux', todayIso() + 'T09:00:00', 'Open', old), yieldRow('Frais', todayIso() + 'T09:00:00')] : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await page.ctx.interests();
+  assert.match(page.els['#main'].innerHTML, /Vieux<span class="stale-dot"[^>]*title="Dernière mise à jour du solde: 2020-03-04"/);
+  assert.doesNotMatch(page.els['#main'].innerHTML, /Frais<span/);
+});
+
+test('the orange bubble is shown in the overview and in the yields page', async () => {
+  const d = new Date(); d.setMonth(d.getMonth() - 5);
+  const last = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const {ctx, els} = masterPage('EUR', {accounts: [{id: 'Lent', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: last, currency: 'EUR', balance_main: 1, balance_native: 1}]});
+  await ctx.home();
+  assert.match(els['#main'].innerHTML, new RegExp(`Lent<span class="stale-dot warn" role="img" title="Dernière mise à jour du solde: ${last}"`));
+  const page = load(async url => ({json: async () => (url.includes('interests') ? [yieldRow('Lent', todayIso() + 'T09:00:00', 'Open', last)] : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await page.ctx.interests();
+  assert.match(page.els['#main'].innerHTML, /Lent<span class="stale-dot warn"/);
+});
+
+test('the names of the accounts are not coloured any more: only the bubbles flag the accounts, in the overview and in the yields page', async () => {
+  const old = todayIso(6), accounts = [
+    {id: 'Lent', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: old, currency: 'EUR', balance_main: 1, balance_native: 1},
+    {id: 'Recent', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: todayIso(1), currency: 'EUR', balance_main: 1, balance_native: 1}];
+  const {ctx, els} = masterPage('EUR', {accounts});
+  await ctx.home();
+  const names = [...els['#main'].innerHTML.matchAll(/<td([^>]*)>(Lent|Recent)(<span[^>]*><\/span>)?<\/td>/g)];
+  assert.deepEqual(names.map(m => [m[2], m[1], Boolean(m[3])]), [['Lent', ' title="Disponibilité: Immédiate"', true], ['Recent', ' title="Disponibilité: Immédiate"', false]]);
+  assert.doesNotMatch(els['#main'].innerHTML, /late-[13]/);
+  const fresh = todayIso(0) + 'T09:00:00', old1 = yieldRow('Lent', fresh, 'Open', old), page = load(async url => ({json: async () => (url.includes('interests') ? [old1, yieldRow('Recent', fresh)] : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await page.ctx.interests();
+  const html = page.els['#main'].innerHTML;
+  assert.match(html, /<td>Lent<span class="stale-dot warn" role="img" title="Dernière mise à jour du solde: [\d-]+"/);
+  assert.match(html, /<td>Recent<\/td>/);
+  assert.doesNotMatch(html, /late-[13]|Calculé le/);
+});
+
+test('yields not recalculated for more than 1 month give a red bubble, more than 15 days an orange one, with the last update in the tooltip', () => {
+  const {get} = load(), bubble = get('calcBubble'), today = new Date(2024, 5, 15);   // 2024-06-15
+  const dot = (calc_date, status = 'Open') => bubble({status, calc_date}, today);
+  const html = (cls, date) => `<span class="${cls}" role="img" title="Dernière mise à jour des rendements: ${date}" aria-label="Dernière mise à jour des rendements: ${date}"></span>`;
+  assert.equal(dot('2024-05-14T10:00:00'), html('stale-dot', '2024-05-14'));        // red: more than 1 month
+  assert.equal(dot('2024-05-15T10:00:00'), html('stale-dot warn', '2024-05-15'));   // exactly 1 month: orange, not red
+  assert.equal(dot('2024-05-30T23:59:00'), html('stale-dot warn', '2024-05-30'));   // orange: more than 15 days
+  assert.equal(dot('2024-05-31T00:00:00'), '');                                      // exactly 15 days: not more
+  assert.equal(dot('2024-06-14T08:00:00'), '');
+  assert.equal(dot('2023-01-01T00:00:00', 'Closed'), '');                            // a closed account is not recalculated
+  assert.equal(dot(null), '');
+});
+
+test('the yields page shows the bubbles of the yields not recalculated, next to those of the balances', async () => {
+  const day = n => { const d = new Date(); d.setDate(d.getDate() - n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const rows = [yieldRow('Rouge', day(40) + 'T09:00:00'), yieldRow('Orange', day(20) + 'T09:00:00'), yieldRow('Frais', day(2) + 'T09:00:00'), yieldRow('Ferme', day(400) + 'T09:00:00', 'Closed')];
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('interests') ? rows : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await ctx.interests();
+  const html = els['#main'].innerHTML, cell = name => html.match(new RegExp(`<td>${name}(.*?)</td>`))[1];
+  assert.equal(cell('Rouge'), `<span class="stale-dot" role="img" title="Dernière mise à jour des rendements: ${day(40)}" aria-label="Dernière mise à jour des rendements: ${day(40)}"></span>`);
+  assert.match(cell('Orange'), new RegExp(`^<span class="stale-dot warn" role="img" title="Dernière mise à jour des rendements: ${day(20)}"`));
+  assert.equal(cell('Frais'), '');
+  assert.equal(cell('Ferme'), '');
+  // both alerts together: balance first, then yields
+  const both = load(async url => ({json: async () => (url.includes('interests') ? [yieldRow('Double', day(40) + 'T09:00:00', 'Open', '2020-01-01')] : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await both.ctx.interests();
+  const titles = [...both.els['#main'].innerHTML.match(/<td>Double(.*?)<\/td>/)[1].matchAll(/title="([^"]+)"/g)].map(m => m[1]);
+  assert.deepEqual(titles, ['Dernière mise à jour du solde: 2020-01-01', `Dernière mise à jour des rendements: ${day(40)}`]);
+});
+
+test('the overview has no bubble for the yields', async () => {
+  const {ctx, els} = masterPage('EUR', {accounts: [{id: 'A', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: todayIso(0), currency: 'EUR', balance_main: 1, balance_native: 1, calc_date: '2020-01-01T00:00:00'}]});
+  await ctx.home();
+  assert.doesNotMatch(els['#main'].innerHTML, /stale-dot|des rendements/);
 });

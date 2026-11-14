@@ -113,7 +113,7 @@ test('the home, interests and account pages use filterable tables', async () => 
   await ctx.home();
   assert.match(els['#main'].innerHTML, /<table class="data">[\s\S]*Filtrer Banque[\s\S]*>1 comptes</);
   await ctx.interests();
-  assert.match(els['#main'].innerHTML, /Filtrer Calculé le/);
+  assert.match(els['#main'].innerHTML, /Filtrer Type/);
   assert.doesNotMatch(els['#main'].innerHTML, /Filtrer 1 an/);
 });
 

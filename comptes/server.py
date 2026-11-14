@@ -83,8 +83,11 @@ class Handler(BaseHTTPRequestHandler):
             rep["all_categories"] = budget.all_categories(con)
             return rep
         if path == "interests":
+            interest.recalc_outdated(con)   # the page is always up to date: what was not computed today is computed now
             rows = con.execute(
-                "SELECT i.*, a.tax, a.type, a.status, a.currency FROM interests i JOIN accounts a ON a.id=i.account "
+                "SELECT i.*, a.tax, a.type, a.status, a.currency, "
+                "(SELECT MAX(t.date) FROM transactions t WHERE t.account=i.account AND t.date<=date('now')) AS last_date "
+                "FROM interests i JOIN accounts a ON a.id=i.account "
                 "ORDER BY a.status DESC, i.account").fetchall()
             return [dict(r) for r in rows]
         if path == "interests/recalc" and m == "POST":
