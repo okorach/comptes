@@ -134,8 +134,9 @@ async function spending(){
     `<label><input type="checkbox" ${r.excluded.includes(c) ? '' : 'checked'} onchange="toggleCat('${jsq(c)}',this.checked)"> <span class="d">${esc(c)}</span></label>`).join('');
   const avgCell = x => SP.group === 'month' ? `<td class="n">${num(x.avg12)}</td>` : '';  // 12-month average: monthly view only
   const matrixCell = v => '<td class="n">' + num(v, sym(MASTER), 0) + '</td>';
-  const matrixRow = c => '<tr><td>' + esc(c) + '</td>' + periods.map(p => matrixCell(r.matrix[c][p])).join('') + '</tr>';
   const cats = Object.keys(r.matrix).sort((a, b) => (r.categories.findIndex(x => x.category === a)) - (r.categories.findIndex(x => x.category === b)));
+  // one row per period (the latest first), one column per category
+  const matrixRow = p => '<tr><td class="d">' + p + '</td>' + cats.map(c => matrixCell(r.matrix[c][p])).join('') + '</tr>';
   $('#main').innerHTML = `<h2>Dépenses</h2>
   <div class="row"><label>Regroupement<select onchange="SP.group=this.value;spending()">${[['month', 'Mois'], ['quarter', 'Trimestre'], ['year', 'Année']].map(([v, l]) => `<option value="${v}" ${SP.group === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
   <label>Période<select onchange="SP.months=+this.value;spending()">${[[12, '12 mois'], [24, '24 mois'], [36, '3 ans'], [60, '5 ans'], [120, '10 ans'], [600, 'Tout']].map(([v, l]) => `<option value="${v}" ${SP.months === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
@@ -146,8 +147,8 @@ async function spending(){
   ${r.categories.map(c => `<tr><td>${esc(c.category)}</td><td class="n ${cls(-c.total)}">${num(c.total)}</td><td class="n">${pct(c.pct)}</td></tr>`).join('')}</table></details>
   ${paneStart('period', 'Par période')}<div class="scroll" style="max-height:420px;overflow-y:auto"><table><tr><th>Période</th><th class="n">Lissées</th><th class="n">Brutes</th>${SP.group === 'month' ? '<th class="n">Moy. 12 mois</th>' : ''}</tr>
   ${s.slice().reverse().map(x => `<tr><td>${x.period}</td><td class="n">${num(x.spread)}</td><td class="n">${num(x.raw)}</td>${avgCell(x)}</tr>`).join('')}</table></div></details></div>
-  <h3>Catégorie × période</h3><div class="scroll"><table><tr><th>Catégorie</th>${periods.map(p => `<th class="n d">${p}</th>`).join('')}</tr>
-  ${cats.map(matrixRow).join('')}</table></div>`;
+  <h3>Période × catégorie</h3><div class="scroll"><table><tr><th>Période</th>${cats.map(c => `<th class="n d">${esc(c)}</th>`).join('')}</tr>
+  ${periods.slice().reverse().map(matrixRow).join('')}</table></div>`;
 }
 function toggleCat(c, included){
   const set = new Set(SP.exclude || []); included ? set.delete(c) : set.add(c);

@@ -931,7 +931,8 @@ test('the spending page shows the category x period matrix, escaped, with the am
   await settle();
   await ctx.spending();
   const html = plain(els['#main'].innerHTML);
-  assert.match(html, /<tr><td>A&lt;b&gt;<\/td><td class="n">1 235 €<\/td><td class="n"><\/td><\/tr>/);
+  assert.match(html, /<tr><th>Période<\/th><th class="n d">A&lt;b&gt;<\/th><\/tr>/);                  // categories across
+  assert.match(html, /<tr><td class="d">2024-02<\/td><td class="n"><\/td><\/tr><tr><td class="d">2024-01<\/td><td class="n">1 235 €<\/td><\/tr>/);   // periods down, latest first
   assert.doesNotMatch(html, /A<b>/);
 });
 
