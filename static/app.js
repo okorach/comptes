@@ -161,11 +161,11 @@ function txRow(t, foreign, aid, hasFx = false, amounts = true){
 }
 const NATIVE_KEY = {y1: 'n1', y3: 'n3', y5: 'n5', y8: 'n8', y_all: 'n_all'};
 const INTEREST_PERIODS = [['1 an', 'y1'], ['3 ans', 'y3'], ['5 ans', 'y5'], ['8 ans', 'y8'], ['Depuis le début', 'y_all']];
-/* Yield in EUR, followed (in small) by the yield in the currency of the account, without the exchange rate effect */
+/* Yield in the master currency, with below it (in small) the yield in the currency of the account, without the exchange rate effect */
 const nativeRateHtml = (native, currency) => {
   if (native == null || !currency || currency === MASTER) return '';
-  const neg = native < 0 ? 'neg' : '';
-  return ` <small class="mut ${neg}" title="Rendement en ${esc(currency)}, hors effet de change">${pct(native)} ${esc(currency)}</small>`;
+  const neg = native < 0 ? ' neg' : '';
+  return `<small class="native-rate mut${neg}" title="Rendement en ${esc(currency)}, hors effet de change">${pct(native)} ${esc(currency)}</small>`;
 };
 const rateHtml = (v, native, currency) => {
   if (v == null) return '<span class="mut">–</span>';

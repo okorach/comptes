@@ -131,13 +131,13 @@ test('the right axis of the home chart starts at 0 when the savings are floored 
   assert.ok(labels.every(l => !l.startsWith('-')));
 });
 
-test('rateHtml shows the yield in EUR followed by the yield in the account currency', () => {
+test('rateHtml shows the yield in EUR with the yield in the account currency below it', () => {
   const rateHtml = load().get('rateHtml');
   const eur = plain(rateHtml(0.123, 0.041, 'CHF'));
-  assert.match(eur, /12,3 %<\/span> <small class="mut " title="[^"]*CHF[^"]*">4,1 % CHF<\/small>/);
+  assert.match(eur, /12,3 %<\/span><small class="native-rate mut" title="[^"]*CHF[^"]*">4,1 % CHF<\/small>/);
   assert.doesNotMatch(plain(rateHtml(0.123, 0.041, 'EUR')), /small/);
   assert.doesNotMatch(plain(rateHtml(0.123, null, 'CHF')), /small/);
-  assert.match(plain(rateHtml(0.05, -0.02, 'USD')), /<small class="mut neg"/);
+  assert.match(plain(rateHtml(0.05, -0.02, 'USD')), /<small class="native-rate mut neg"/);
   assert.match(rateHtml(null, 0.1, 'CHF'), /–/);
 });
 

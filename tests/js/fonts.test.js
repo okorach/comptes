@@ -38,3 +38,7 @@ test('names that come from the data are marked as dynamic, fixed labels of table
 test('the icons of a transaction row stay on one line', () => {
   assert.match(read('style.css'), /td\.actions\{[^}]*white-space:nowrap/);
 });
+
+test('the yield in the currency of the account is displayed below the one in the master currency', () => {
+  assert.match(read('style.css'), /\.native-rate\{display:block\}/);
+});
