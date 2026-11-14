@@ -236,7 +236,7 @@ async function account(id, msg = '', focus = null){
   <button onclick="${a.status === 'Open' ? 'askCloseAccount' : 'reopenAccount'}('${jsq(a.id)}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
   <a href="/api/account/${enc(a.id)}/export.csv"><button>Exporter CSV</button></a>
   ${importer}</div>
-  <div id="imp"></div><div class="ok">${esc(msg)}</div>
+  <div id="imp"></div><div class="ok">${esc(msg)}</div><div class="err" id="close_err"></div>
   <div class="card"><b id="form_title">Nouvelle écriture</b><div class="row"><label>Date<input type="date" id="f_date" value="${new Date().toISOString().slice(0, 10)}"></label>${fields}
   <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
@@ -270,7 +270,13 @@ async function delTx(tid, id){ if (confirm('Supprimer cette écriture ?')) { awa
 async function setStatus(id, status){ await api('account/' + enc(id), 'PUT', {status}); await account(id); }
 const reopenAccount = id => setStatus(id, 'Open');
 /* Closing an account hides it from the overview: the name of the account has to be typed to confirm */
-function askCloseAccount(id){
+async function askCloseAccount(id){
+  $('#close_err').textContent = '';
+  const a = (await api('accounts')).find(x => x.id === id);   // fresh balance: an account is only closed when it is zero
+  if (a && (cents(a.balance_main) !== 0 || cents(a.balance_native) !== 0)) {
+    $('#close_err').textContent = `Impossible de clôturer ce compte : son solde n'est pas nul (${num(a.currency === MASTER ? a.balance_main : a.balance_native, sym(a.currency))}).`;
+    return;
+  }
   $('#guard').innerHTML = `<div class="modal-back"><form class="modal card" role="dialog" aria-modal="true" aria-labelledby="g_title" onsubmit="closeAccount('${jsq(id)}'); return false">
   <b id="g_title">Clôturer le compte</b><p>Pour confirmer la clôture, saisissez le nom du compte : <b class="d">${esc(id)}</b></p>
   <input id="g_name" autocomplete="off" aria-label="Nom du compte" oninput="guardCheck('${jsq(id)}')" onkeydown="if (event.key === 'Escape') guardClose()">
@@ -282,7 +288,7 @@ const guardClose = () => { $('#guard').innerHTML = ''; };
 async function closeAccount(id){
   if ($('#g_name').value !== id) return;   // never closed without the exact name, whatever the state of the button
   guardClose();
-  await setStatus(id, 'Closed');
+  try { await setStatus(id, 'Closed'); } catch (e) { $('#close_err').textContent = e.message; }   // the server checks the balance too
 }
 async function recalcOne(id){ await api('interests/recalc', 'POST', {account: id}); await account(id, 'Rendements recalculés'); }
 async function addDep(id){ try { await api('account/' + enc(id) + '/deposits', 'POST', {date: $('#d_date').value, amount: $('#d_amt').value}); await account(id, 'Versement ajouté'); } catch (e) { alert(e.message); } }
