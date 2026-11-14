@@ -105,7 +105,8 @@ function dataTable(cols, rows, row, opt = {}){
   const t = {cols: c, rows, row, noun: opt.noun || 'lignes', footer: opt.footer, filters: c.map(() => null), sort: null};
   tables.set(id, t);
   tables.delete(id - 50);  // the page only shows a few tables at a time: keep the registry bounded
+  const foot = opt.footer ? '<tfoot id="tf-' + id + '">' + opt.footer(rows) + '</tfoot>' : '';
   const head = c.map((col, i) => tableHeadCell(id, col, i)).join(''), filters = c.map((col, i) => tableFilterCell(id, col, i)).join('');
   return `<div class="scroll" style="${opt.style || ''}"><table class="data"><thead><tr>${head}</tr><tr class="filters">${filters}</tr></thead>` +
-    `<tbody id="tb-${id}">${rows.map(row).join('')}</tbody>${opt.footer ? `<tfoot id="tf-${id}">${opt.footer(rows)}</tfoot>` : ''}</table></div><div class="mut" id="tc-${id}">${tableCount(t, rows.length)}</div>`;
+    `<tbody id="tb-${id}">${rows.map(row).join('')}</tbody>${foot}</table></div><div class="mut" id="tc-${id}">${tableCount(t, rows.length)}</div>`;
 }
