@@ -1,5 +1,6 @@
 """Write operations: transactions, deposits, accounts."""
 import sqlite3
+import unicodedata
 
 from . import calc, interest
 
@@ -118,6 +119,27 @@ def recompute_everything(con: sqlite3.Connection) -> None:
         if d["native_amount"] is not None:
             con.execute("UPDATE deposits SET amount_main=? WHERE id=?", (d["native_amount"] / fx.rate(d["currency"], d["date"]), d["id"]))
     interest.recalc_all(con, force=True)
+
+
+THOUSANDS_FORBIDDEN = "<>&\"+-"   # markup characters and the signs of a number (the apostrophe is fine: 1'234'567.89)
+
+
+def set_number_format(con: sqlite3.Connection, decimal: str, thousands: str) -> None:
+    """Chooses the decimal separator ("." or ",") and the thousands separator (empty, or any single character that is not a digit,
+    a sign, a markup character, a control character or the decimal separator). ValueError otherwise, nothing changes."""
+    if decimal not in (".", ","):
+        raise ValueError("Le séparateur décimal doit être le point ou la virgule")
+    if not isinstance(thousands, str) or len(thousands) > 1:
+        raise ValueError("Le séparateur des milliers doit être vide ou un seul caractère")
+    if thousands:
+        category = unicodedata.category(thousands)
+        if thousands.isdigit() or thousands in THOUSANDS_FORBIDDEN or category[0] == "C" or category in ("Zl", "Zp"):
+            raise ValueError(f"Caractère interdit comme séparateur des milliers : {thousands!r}")
+        if thousands == decimal:
+            raise ValueError("Les séparateurs décimal et des milliers doivent être différents")
+    con.execute("INSERT OR REPLACE INTO params VALUES('decimal_separator',?)", (decimal,))
+    con.execute("INSERT OR REPLACE INTO params VALUES('thousands_separator',?)", (thousands,))
+    con.commit()
 
 
 def set_master_currency(con: sqlite3.Connection, currency: str) -> None:

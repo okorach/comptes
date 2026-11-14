@@ -90,6 +90,14 @@ class ServerTest(unittest.TestCase):
             self.call("POST", "/api/master_currency", {"currency": "EUR"})
         self.assertEqual(self.call("GET", "/api/meta")["master_currency"], "EUR")
 
+    def test_number_format(self):
+        self.assertEqual(self.call("GET", "/api/meta")["number_format"], {"decimal": ".", "thousands": " "})
+        self.assertEqual(self.call("POST", "/api/number_format", {"decimal": ".", "thousands": ","}), {"ok": True})
+        self.assertEqual(self.call("GET", "/api/meta")["number_format"], {"decimal": ".", "thousands": ","})
+        self.assertEqual(self.call("POST", "/api/number_format", {"decimal": ".", "thousands": "."})["HTTP"], 400)   # same separators
+        self.assertEqual(self.call("GET", "/api/meta")["number_format"], {"decimal": ".", "thousands": ","})
+        self.call("POST", "/api/number_format", {"decimal": ".", "thousands": " "})
+
     def test_refresh_of_the_exchange_rates(self):
         with mock.patch.object(rates, "fetch_rates", return_value={"2030-01-07": 1.5}) as fetched:  # never the real internet
             res = self.call("POST", "/api/fx/refresh")

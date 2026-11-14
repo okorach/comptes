@@ -13,9 +13,9 @@ function niceTicks(min, max, target = 5){
 }
 function fmtTick(v, step){
   const a = Math.abs(v);
-  if (a >= 1e6) return (v / 1e6).toLocaleString('fr-FR', {maximumFractionDigits: 2}) + ' M';
-  if (a >= 1e3) return (v / 1e3).toLocaleString('fr-FR', {maximumFractionDigits: step >= 1e3 ? 0 : 1}) + ' k';
-  return v.toLocaleString('fr-FR', {maximumFractionDigits: 0});
+  if (a >= 1e6) return formatNumber(v / 1e6, 0, 2) + ' M';
+  if (a >= 1e3) return formatNumber(v / 1e3, 0, step >= 1e3 ? 0 : 1) + ' k';
+  return formatNumber(v, 0);
 }
 const CHART_W = 1000, CHART_L = 56, CHART_R = 12, CHART_R2 = 56, CHART_T = 10, CHART_B = 28;
 const charts = new Map();  // id -> {labels, series, from, to, height, R, opt}: state of each chart, used by the time window sliders and the hover
@@ -151,7 +151,7 @@ function chartRange(id, which, value){
 }
 
 /* Value with its unit: the one of the series (s.unit), else of the chart (opt.unit), € by default */
-const chartValue = (c, v, s) => esc(`${Math.round(v).toLocaleString('fr-FR')} ${s?.unit ?? c.opt.unit ?? '€'}`);
+const chartValue = (c, v, s) => esc(`${formatNumber(Math.round(v))} ${s?.unit ?? c.opt.unit ?? '€'}`);
 
 /* Hover: a guide line, a dot on each line and a tooltip with the values of the data point below the mouse */
 function chartPointAt(c, svgX){

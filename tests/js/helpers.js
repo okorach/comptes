@@ -35,10 +35,12 @@ function load(fetchImpl) {
     location: {hash: ''}, window: {addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); }, scrollTo() {}}, confirm: () => true, alert: m => { throw new Error('alert: ' + m); },
   };
   vm.createContext(ctx);
-  for (const f of ['charts.js', 'tables.js', 'modal.js', 'app.js']) {
+  for (const f of ['numformat.js', 'charts.js', 'tables.js', 'modal.js', 'app.js']) {
     const file = path.join(STATIC, f);
     vm.runInContext(fs.readFileSync(file, 'utf8') + ';', ctx, {filename: file});
   }
+  // most of the tests were written with the French format (1 234,56): they run with it, unless they choose another one
+  vm.runInContext("setNumberFormat({decimal: ',', thousands: ' '})", ctx);
   // `const` declarations are not properties of the context: expose them through a lookup helper
   const get = name => vm.runInContext(name, ctx);
   return {ctx, els, mk, get, listeners};

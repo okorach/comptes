@@ -16,6 +16,19 @@ def master_currency(con: sqlite3.Connection) -> str:
     return row[0] if row and row[0] else DEFAULT_MASTER_CURRENCY
 
 
+DEFAULT_NUMBER_FORMAT = {"decimal": ".", "thousands": " "}   # 1 234 567.89
+
+
+def number_format(con: sqlite3.Connection) -> dict:
+    """How the numbers are displayed: {decimal: "." or ",", thousands: "" (none) or a single character}"""
+    out = dict(DEFAULT_NUMBER_FORMAT)
+    for key in out:
+        row = con.execute("SELECT value FROM params WHERE key=?", (key + "_separator",)).fetchone()
+        if row and row[0] is not None:
+            out[key] = row[0]
+    return out
+
+
 def account_summaries(con, as_of=None):
     """Latest balance (master currency) per account on or before as_of."""
     as_of = as_of or today_iso()

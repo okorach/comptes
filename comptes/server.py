@@ -74,6 +74,7 @@ class Handler(BaseHTTPRequestHandler):
                     "types": [dict(r) for r in con.execute("SELECT * FROM account_types ORDER BY name")],
                     "currencies": [r[0] for r in con.execute("SELECT DISTINCT currency FROM fx_rates")] + ["EUR"],
                     "master_currency": calc.master_currency(con),
+                    "number_format": calc.number_format(con),
                     "banks": [r[0] for r in con.execute("SELECT DISTINCT bank FROM accounts WHERE bank IS NOT NULL ORDER BY 1")]}
         if path == "search":
             return search.run(con, q)
@@ -95,6 +96,9 @@ class Handler(BaseHTTPRequestHandler):
             if d.get("account"):
                 interest.recalc(con, d["account"]); con.commit(); return {"ok": True, "n": 1}
             return {"ok": True, "n": interest.recalc_all(con, force=bool(d.get("force")))}
+        if path == "number_format" and m == "POST":
+            d = self._body()
+            ops.set_number_format(con, d.get("decimal"), d.get("thousands")); return {"ok": True}
         if path == "master_currency" and m == "POST":
             ops.set_master_currency(con, self._body().get("currency")); return {"ok": True}
         if path == "fx/refresh" and m == "POST":
