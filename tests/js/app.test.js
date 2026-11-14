@@ -986,3 +986,33 @@ test('a yield that rounds to 0.0 % is shown as 0.0 %, never -0.0 %, and is not r
   assert.match(plain(rateHtml(0.05, -0.0001, 'CHF')), /0\.0 % CHF<\/small>/);
   assert.match(rateHtml(0.05, -0.02, 'CHF'), /native-rate mut neg/);
 });
+
+test('the period x category table has its own grouping select (month, quarter, year), asked to the server only when it differs from the page one', async () => {
+  const urls = [];
+  const report = group => ({categories: [{category: 'A', total: 10, pct: 1}], series: [{period: group === 'year' ? '2024' : '2024-01', spread: 1, raw: 1, avg12: 1}],
+    matrix: {A: {[group === 'year' ? '2024' : '2024-01']: 100}}, excluded: [], all_categories: ['A']});
+  const {ctx, els, get} = load(async url => {
+    urls.push(url);
+    return {json: async () => (url.includes('spending') ? report(/group=(\w+)/.exec(url)[1]) : url.includes('meta') ? {categories: [], master_currency: 'EUR'} : [])};
+  });
+  await settle();
+  await ctx.spending();
+  assert.equal(urls.filter(u => u.includes('spending')).length, 1);          // same grouping: one request
+  assert.match(els['#main'].innerHTML, /<select id="matrixGroup"[^>]*>.*<option value="month" selected>Mois/);
+  get('SP').matrixGroup = 'year';
+  await ctx.spending();
+  const html = plain(els['#main'].innerHTML);
+  assert.match(html, /<option value="year" selected>Année/);
+  assert.match(html, /<th>Période<\/th><th class="n d">A<\/th><\/tr>\s*<tr><td class="d">2024<\/td><td class="n">100 €<\/td>/);   // the matrix by year
+  assert.match(html, /<td>2024-01<\/td>/);                                    // the rest of the page still by month
+});
+
+test('the month, quarter or year in progress gets an orange bullet in the spending tables, a past period does not', () => {
+  const {get} = load(), flag = get('incompleteBubble'), now = new Date(2026, 10, 14);
+  assert.match(flag('2026-T4', 'quarter', now), /stale-dot warn.*Trimestre incomplet/);
+  assert.match(flag('2026', 'year', now), /stale-dot warn.*Année incomplète/);
+  assert.equal(flag('2026-T3', 'quarter', now), '');
+  assert.equal(flag('2025', 'year', now), '');
+  assert.match(flag('2026-11', 'month', now), /stale-dot warn.*Mois incomplet/);
+  assert.equal(flag('2026-10', 'month', now), '');
+});
