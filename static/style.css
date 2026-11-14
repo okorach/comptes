@@ -20,6 +20,21 @@ tr.total td{font-size:16px;font-weight:700;border-bottom:0;border-top:2px solid 
 tr.hl td{background:rgba(255,190,0,.28)}
 /* title of a block followed by its controls */
 .title-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px}
+/* Modal windows (static/modal.js) */
+.modal-back{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,18,24,.5);backdrop-filter:blur(2px);animation:modal-fade .15s ease-out}
+.modal{width:100%;max-width:440px;margin:0;padding:22px 22px 18px;background:var(--bg);border:1px solid var(--line);border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.35);animation:modal-pop .16s ease-out}
+.modal-head{display:flex;gap:14px;align-items:flex-start} .modal-text{flex:1;min-width:0}
+.modal-icon{flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:50%}
+.modal-icon.danger,.modal-icon.error{background:rgba(185,28,28,.12);color:var(--neg)}
+.modal h2{margin:2px 0 6px;font-size:17px} .modal p{margin:0;color:var(--mut);line-height:1.5}
+.modal-name{margin-top:10px;padding:6px 10px;border-radius:6px;background:var(--card);border:1px solid var(--line);font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.modal input{width:100%;margin-top:10px}
+.modal-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:22px}
+button.danger{background:var(--neg);border-color:var(--neg);color:#fff} button.danger:hover:not(:disabled){filter:brightness(.92)}
+button:disabled{opacity:.45;cursor:not-allowed}
+@keyframes modal-fade{from{opacity:0}to{opacity:1}}
+@keyframes modal-pop{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.modal-back,.modal{animation:none}}
 tr.closed{background:rgba(127,127,127,.14)}  /* closed accounts, shown when « comptes ouverts seulement » is unticked */
 tr.click{cursor:pointer} tr.click:hover{background:rgba(127,127,127,.1)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0}

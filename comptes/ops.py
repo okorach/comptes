@@ -91,7 +91,14 @@ def create_account(con, d):
     con.commit()
 
 
-def set_status(con, acc, status):
+def set_status(con: sqlite3.Connection, acc: str, status: str) -> None:
+    """Opens or closes an account. An account can only be closed when its balance is zero (ValueError otherwise)."""
+    if status == "Closed":
+        last = con.execute("SELECT t.balance_main, t.native_balance, a.currency FROM transactions t JOIN accounts a ON a.id=t.account "
+                           "WHERE t.account=? AND t.date<=? ORDER BY t.date DESC, t.id DESC LIMIT 1", (acc, calc.today_iso())).fetchone()
+        if last and any(abs(v) >= 0.005 for v in (last["balance_main"] or 0, last["native_balance"] or 0)):
+            balance = (last["native_balance"] if last["native_balance"] else last["balance_main"]) or 0
+            raise ValueError(f"Impossible de clôturer {acc} : son solde n'est pas nul ({balance:.2f} {last['currency']})".replace(".", ","))
     con.execute("UPDATE accounts SET status=? WHERE id=?", (status, acc))
     con.commit()
 

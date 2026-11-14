@@ -233,7 +233,7 @@ async function account(id, msg = '', focus = null){
     ? `<label class="inline">Importer <select id="imp_bank">${bankOptions}</select><input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : '';
   $('#main').innerHTML = `<h2><span class="d">${esc(a.id)}</span> <span class="mut d" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
   <div class="row">${focus ? '<button onclick="location.hash=\'#/search\'">← Retour à la recherche</button>' : '<button onclick="location.hash=\'#/\'">← Retour</button>'}
-  <button onclick="setStatus('${jsq(a.id)}','${a.status === 'Open' ? 'Closed' : 'Open'}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
+  <button onclick="${a.status === 'Open' ? 'askCloseAccount' : 'reopenAccount'}('${jsq(a.id)}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
   <a href="/api/account/${enc(a.id)}/export.csv"><button>Exporter CSV</button></a>
   ${importer}</div>
   <div id="imp"></div><div class="ok">${esc(msg)}</div>
@@ -266,11 +266,31 @@ async function saveTx(id){
     await account(id, 'Écriture enregistrée');
   } catch (e) { $('#form_err').textContent = e.message; }
 }
-async function delTx(tid, id){ if (confirm('Supprimer cette écriture ?')) { await api('transaction/' + tid, 'DELETE'); await account(id, 'Écriture supprimée'); } }
+async function delTx(tid, id){
+  const ok = await confirmDialog({title: "Supprimer l'écriture ?", message: 'Cette écriture sera définitivement supprimée et les soldes du compte seront recalculés.', confirmLabel: 'Supprimer'});
+  if (ok) { await api('transaction/' + tid, 'DELETE'); await account(id, 'Écriture supprimée'); }
+}
 async function setStatus(id, status){ await api('account/' + enc(id), 'PUT', {status}); await account(id); }
+const reopenAccount = id => setStatus(id, 'Open');
+/* Closing an account: only when its balance is zero, and after typing its name */
+const CLOSE_REFUSED = 'Clôture impossible';
+const CLOSE_MESSAGE = "Le compte ne sera plus affiché dans la vue d'ensemble (sauf si « Montrer les comptes fermés » est coché). Pour confirmer, saisissez son nom :";
+async function askCloseAccount(id){
+  const a = (await api('accounts')).find(x => x.id === id);   // fresh balance
+  if (a && (cents(a.balance_main) !== 0 || cents(a.balance_native) !== 0)) {
+    const balance = num(a.currency === MASTER ? a.balance_main : a.balance_native, sym(a.currency));
+    return errorDialog("Ce compte ne peut pas être clôturé : son solde n'est pas nul (" + balance + ').', CLOSE_REFUSED);
+  }
+  const ok = await confirmDialog({title: 'Clôturer le compte ?', message: CLOSE_MESSAGE, strong: id, require: id, inputLabel: 'Nom du compte', confirmLabel: 'Clôturer le compte'});
+  if (!ok) return;
+  try { await setStatus(id, 'Closed'); } catch (e) { await errorDialog(e.message, CLOSE_REFUSED); }   // the server checks the balance too
+}
 async function recalcOne(id){ await api('interests/recalc', 'POST', {account: id}); await account(id, 'Rendements recalculés'); }
-async function addDep(id){ try { await api('account/' + enc(id) + '/deposits', 'POST', {date: $('#d_date').value, amount: $('#d_amt').value}); await account(id, 'Versement ajouté'); } catch (e) { alert(e.message); } }
-async function delDep(did, id){ await api('deposit/' + did, 'DELETE'); await account(id); }
+async function addDep(id){ try { await api('account/' + enc(id) + '/deposits', 'POST', {date: $('#d_date').value, amount: $('#d_amt').value}); await account(id, 'Versement ajouté'); } catch (e) { await errorDialog(e.message); } }
+async function delDep(did, id){
+  const ok = await confirmDialog({title: 'Supprimer le versement ?', message: 'Ce versement sera définitivement supprimé.', confirmLabel: 'Supprimer'});
+  if (ok) { await api('deposit/' + did, 'DELETE'); await account(id); }
+}
 
 /* ------------------------------------------------------------------ search */
 const SEARCH_CRITERIA = ['text', 'account', 'category', 'subcategory', 'date_from', 'date_to', 'amount_min', 'amount_max'];
@@ -380,7 +400,7 @@ async function fxList(){
   const cur = $('#x_cur').value, rows = await api('fx?currency=' + cur);
   $('#fxl').innerHTML = `<table>${rows.slice(0, 12).map(r => `<tr><td>${r.date}</td><td class="n">${r.rate}</td></tr>`).join('')}</table>`;
 }
-async function addFx(){ try { await api('fx', 'POST', {currency: $('#x_cur').value, date: $('#x_date').value, rate: $('#x_rate').value.replace(',', '.')}); await fxList(); } catch (e) { alert(e.message); } }
+async function addFx(){ try { await api('fx', 'POST', {currency: $('#x_cur').value, date: $('#x_date').value, rate: $('#x_rate').value.replace(',', '.')}); await fxList(); } catch (e) { await errorDialog(e.message); } }
 async function createAcc(){
   const v = i => $('#' + i).value;
   try {
