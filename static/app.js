@@ -17,7 +17,10 @@ const num = (v, cur = sym(MASTER), digits = 2) => {
   if (v == null) return '';
   return formatNumber(roundTo(v, digits), digits) + ' ' + esc(cur);
 };
-const pct = v => v == null ? '–' : formatNumber(v * 100, 1) + ' %';
+/* A ratio that rounds to 0.0 % is 0.0 %: never -0.0 %, and not negative (so, not red) */
+const pctValue = v => Math.round(v * 1000) === 0 ? 0 : v * 100;
+const pct = v => v == null ? '–' : formatNumber(pctValue(v), 1) + ' %';
+const negPct = v => pctValue(v) < 0;
 const cls = v => cents(v) < 0 ? 'neg' : '';
 const sym = c => ({EUR: '€', CHF: 'CHF', USD: '$', GBP: '£'}[c] || c);
 async function api(path, method, body){
@@ -192,12 +195,12 @@ const INTEREST_PERIODS = [['1 an', 'y1'], ['3 ans', 'y3'], ['5 ans', 'y5'], ['8 
 /* Yield in the master currency, with below it (in small) the yield in the currency of the account, without the exchange rate effect */
 const nativeRateHtml = (native, currency) => {
   if (native == null || !currency || currency === MASTER) return '';
-  const neg = native < 0 ? ' neg' : '';
+  const neg = negPct(native) ? ' neg' : '';
   return `<small class="native-rate mut${neg}" title="Rendement en ${esc(currency)}, hors effet de change">${pct(native)} ${esc(currency)}</small>`;
 };
 const rateHtml = (v, native, currency) => {
   if (v == null) return '<span class="mut">–</span>';
-  return `<span class="${v < 0 ? 'neg' : ''}">${pct(v)}</span>${nativeRateHtml(native, currency)}`;
+  return `<span class="${negPct(v) ? 'neg' : ''}">${pct(v)}</span>${nativeRateHtml(native, currency)}`;
 };
 const interestRow = r => `<tr class="click" onclick="location.hash='#/account/${enc(r.account)}'"><td>${esc(r.account)}${staleBubble(r)}${calcBubble(r)}</td><td>${esc(r.type)}</td>${rateCells(r)}</tr>`;
 const rateCells = r => Object.entries(NATIVE_KEY).map(([y, n]) => `<td class="n">${rateHtml(r[y], r[n], r.currency)}</td>`).join('');
