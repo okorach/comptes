@@ -12,7 +12,11 @@ const esc = s => {
 let MASTER = 'EUR';  // master currency of the application: totals, balances and yields of all the accounts are in it
 /* An amount that rounds to 0 is shown as 0, never as -0 (and not as negative: see cls) */
 const cents = v => Math.round(v * 100) / 100 === 0 ? 0 : v;
-const num = (v, cur = sym(MASTER), digits = 2) => v == null ? '' : formatNumber(digits === 2 ? cents(v) : (Math.round(v) || 0), digits) + ' ' + esc(cur);   // digits: 2 (cents) or 0 (rounded)
+const roundTo = (v, digits) => digits === 2 ? cents(v) : (Math.round(v) || 0);   // digits: 2 (cents) or 0 (rounded to the unit, never -0)
+const num = (v, cur = sym(MASTER), digits = 2) => {
+  if (v == null) return '';
+  return formatNumber(roundTo(v, digits), digits) + ' ' + esc(cur);
+};
 const pct = v => v == null ? '–' : formatNumber(v * 100, 1) + ' %';
 const cls = v => cents(v) < 0 ? 'neg' : '';
 const sym = c => ({EUR: '€', CHF: 'CHF', USD: '$', GBP: '£'}[c] || c);
