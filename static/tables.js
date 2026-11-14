@@ -82,10 +82,11 @@ function tableHeadCell(id, col, i){
 
 function tableFilterCell(id, col, i){
   if (col.filter === false) return '<th></th>';
+  const cell = col.num ? '<th class="n">' : '<th>';  // the filter of a numeric column sits under its right-aligned header
   const label = `aria-label="Filtrer ${esc(col.label)}"`;
-  if (!col.options) return `<th><input type="search" ${label} placeholder="filtrer" size="8" oninput="tableFilter(${id},${i},this.value)"></th>`;
+  if (!col.options) return `${cell}<input type="search" ${label} placeholder="filtrer" size="8" oninput="tableFilter(${id},${i},this.value)"></th>`;
   const opts = col.options.map((o, k) => `<option value="${k}">${esc(o) || '(vide)'}</option>`).join('');
-  return `<th><select ${label} onchange="tableFilter(${id},${i},this.value)"><option value="">(tous)</option>${opts}</select></th>`;
+  return `${cell}<select ${label} onchange="tableFilter(${id},${i},this.value)"><option value="">(tous)</option>${opts}</select></th>`;
 }
 
 /* Drop-down list of the distinct values when there are few of them */

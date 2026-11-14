@@ -116,3 +116,13 @@ test('the home, interests and account pages use filterable tables', async () => 
   assert.match(els['#main'].innerHTML, /Filtrer Calculé le/);
   assert.doesNotMatch(els['#main'].innerHTML, /Filtrer 1 an/);
 });
+
+test('the filter of a numeric column is right-aligned like its header and values, the others are not', () => {
+  const {ctx} = load();
+  const html = ctx.dataTable([{label: 'Nom', value: r => r.n}, {label: 'Montant', num: true, value: r => r.v}, {label: 'Solde', num: true, value: r => r.w, filter: 'text'}],
+    [{n: 'a', v: 1, w: 3}, {n: 'b', v: 2, w: 4}], () => '');
+  const filters = html.match(/<tr class="filters">(.*?)<\/tr>/s)[1];
+  assert.match(filters, /^<th><select[^>]*aria-label="Filtrer Nom"/);
+  assert.match(filters, /<th class="n"><select[^>]*aria-label="Filtrer Montant"/);
+  assert.match(filters, /<th class="n"><input[^>]*aria-label="Filtrer Solde"/);
+});
