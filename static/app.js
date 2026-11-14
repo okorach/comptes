@@ -88,7 +88,7 @@ async function spending(){
   const s = r.series;
   const periods = s.map(x => x.period);
   const chips = r.all_categories.concat(r.all_categories.includes('(sans catégorie)') ? [] : ['(sans catégorie)']).map(c =>
-    `<label><input type="checkbox" ${r.excluded.includes(c) ? '' : 'checked'} onchange="toggleCat('${jsq(c)}',this.checked)"> ${esc(c)}</label>`).join('');
+    `<label><input type="checkbox" ${r.excluded.includes(c) ? '' : 'checked'} onchange="toggleCat('${jsq(c)}',this.checked)"> <span class="d">${esc(c)}</span></label>`).join('');
   const avgCell = x => SP.group === 'month' ? `<td class="n">${num(x.avg12)}</td>` : '';  // 12-month average: monthly view only
   const cats = Object.keys(r.matrix).sort((a, b) => (r.categories.findIndex(x => x.category === a)) - (r.categories.findIndex(x => x.category === b)));
   $('#main').innerHTML = `<h2>Dépenses</h2>
@@ -101,7 +101,7 @@ async function spending(){
   ${r.categories.map(c => `<tr><td>${esc(c.category)}</td><td class="n ${cls(-c.total)}">${num(c.total)}</td><td class="n">${pct(c.pct)}</td></tr>`).join('')}</table></details>
   ${paneStart('period', 'Par période')}<div class="scroll" style="max-height:420px;overflow-y:auto"><table><tr><th>Période</th><th class="n">Lissées</th><th class="n">Brutes</th>${SP.group === 'month' ? '<th class="n">Moy. 12 mois</th>' : ''}</tr>
   ${s.slice().reverse().map(x => `<tr><td>${x.period}</td><td class="n">${num(x.spread)}</td><td class="n">${num(x.raw)}</td>${avgCell(x)}</tr>`).join('')}</table></div></details></div>
-  <h3>Catégorie × période</h3><div class="scroll"><table><tr><th>Catégorie</th>${periods.map(p => `<th class="n">${p}</th>`).join('')}</tr>
+  <h3>Catégorie × période</h3><div class="scroll"><table><tr><th>Catégorie</th>${periods.map(p => `<th class="n d">${p}</th>`).join('')}</tr>
   ${cats.map(c => `<tr><td>${esc(c)}</td>${periods.map(p => `<td class="n">${r.matrix[c][p] != null ? Math.round(r.matrix[c][p]).toLocaleString('fr-FR') : ''}</td>`).join('')}</tr>`).join('')}</table></div>`;
 }
 function toggleCat(c, included){
@@ -153,7 +153,7 @@ const INTEREST_COLUMNS = [
 
 function interestsTable(interests, currency){
   if (!interests) return '<div class="mut">Pas encore calculé</div>';
-  const rows = INTEREST_PERIODS.map(([l, k]) => `<tr><td>${l}</td><td class="n">${rateHtml(interests[k], interests[NATIVE_KEY[k]], currency)}</td></tr>`).join('');
+  const rows = INTEREST_PERIODS.map(([l, k]) => `<tr><td class="s">${l}</td><td class="n">${rateHtml(interests[k], interests[NATIVE_KEY[k]], currency)}</td></tr>`).join('');
   return `<table>${rows}</table>`;
 }
 function depositRow(d, aid){
@@ -198,7 +198,7 @@ async function account(id, msg = '', focus = null){
   const bankOptions = importBanks.map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('');
   const importer = a.mode === 'flow' || a.mode === 'static'  // only the accounts that take amounts can import them
     ? `<label class="inline">Importer <select id="imp_bank">${bankOptions}</select><input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : '';
-  $('#main').innerHTML = `<h2>${esc(a.id)} <span class="mut" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
+  $('#main').innerHTML = `<h2><span class="d">${esc(a.id)}</span> <span class="mut d" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
   <div class="row">${focus ? '<button onclick="location.hash=\'#/search\'">← Retour à la recherche</button>' : '<button onclick="location.hash=\'#/\'">← Retour</button>'}
   <button onclick="setStatus('${jsq(a.id)}','${a.status === 'Open' ? 'Closed' : 'Open'}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
   <a href="/api/account/${enc(a.id)}/export.csv"><button>Exporter CSV</button></a>

@@ -46,7 +46,7 @@ function tableRefresh(id){
   const t = tables.get(id);
   if (!t) return;
   const rows = tableRows(t);
-  $('#tb-' + id).innerHTML = rows.length ? rows.map(t.row).join('') : `<tr><td colspan="${t.cols.length}" class="mut">Aucune ligne</td></tr>`;
+  $('#tb-' + id).innerHTML = rows.length ? rows.map(t.row).join('') : `<tr><td colspan="${t.cols.length}" class="mut s">Aucune ligne</td></tr>`;
   $('#tc-' + id).textContent = tableCount(t, rows.length);
   t.cols.forEach((col, i) => {
     const dir = t.sort?.col === i ? t.sort.dir : null, btn = $(`#ts-${id}-${i}`);
