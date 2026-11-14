@@ -12,8 +12,12 @@ const esc = s => {
 let MASTER = 'EUR';  // master currency of the application: totals, balances and yields of all the accounts are in it
 /* An amount that rounds to 0 is shown as 0, never as -0 (and not as negative: see cls) */
 const cents = v => Math.round(v * 100) / 100 === 0 ? 0 : v;
-const num = (v, cur = sym(MASTER)) => v == null ? '' : cents(v).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + esc(cur);
-const pct = v => v == null ? '–' : (v * 100).toLocaleString('fr-FR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + ' %';
+const roundTo = (v, digits) => digits === 2 ? cents(v) : (Math.round(v) || 0);   // digits: 2 (cents) or 0 (rounded to the unit, never -0)
+const num = (v, cur = sym(MASTER), digits = 2) => {
+  if (v == null) return '';
+  return formatNumber(roundTo(v, digits), digits) + ' ' + esc(cur);
+};
+const pct = v => v == null ? '–' : formatNumber(v * 100, 1) + ' %';
 const cls = v => cents(v) < 0 ? 'neg' : '';
 const sym = c => ({EUR: '€', CHF: 'CHF', USD: '$', GBP: '£'}[c] || c);
 async function api(path, method, body){
@@ -25,6 +29,7 @@ async function api(path, method, body){
 let META = null;
 const meta = async () => {
   META = META || await api('meta');
+  if (META.number_format) setNumberFormat(META.number_format);   // the separators chosen in the administration page
   MASTER = String(META.master_currency).match(/^[A-Z]{3}$/g)?.[0] ?? 'EUR';  // a currency code, nothing else
   return META;
 };
@@ -125,7 +130,7 @@ async function spending(){
   const chips = r.all_categories.concat(r.all_categories.includes('(sans catégorie)') ? [] : ['(sans catégorie)']).map(c =>
     `<label><input type="checkbox" ${r.excluded.includes(c) ? '' : 'checked'} onchange="toggleCat('${jsq(c)}',this.checked)"> <span class="d">${esc(c)}</span></label>`).join('');
   const avgCell = x => SP.group === 'month' ? `<td class="n">${num(x.avg12)}</td>` : '';  // 12-month average: monthly view only
-  const matrixCell = v => '<td class="n">' + (v == null ? '' : Math.round(v).toLocaleString('fr-FR')) + '</td>';
+  const matrixCell = v => '<td class="n">' + num(v, sym(MASTER), 0) + '</td>';
   const matrixRow = c => '<tr><td>' + esc(c) + '</td>' + periods.map(p => matrixCell(r.matrix[c][p])).join('') + '</tr>';
   const cats = Object.keys(r.matrix).sort((a, b) => (r.categories.findIndex(x => x.category === a)) - (r.categories.findIndex(x => x.category === b)));
   $('#main').innerHTML = `<h2>Dépenses</h2>
@@ -389,7 +394,7 @@ async function importCommit(id){ const r = await api('account/' + enc(id) + '/im
 
 /* ------------------------------------------------------------------ admin */
 async function admin(msg = ''){
-  const m = await meta();
+  const m = await meta(), f = m.number_format ?? NUMBER_FORMAT;
   $('#main').innerHTML = `<h2>Administration</h2><div class="ok">${esc(msg)}</div>
   <div class="card"><b>Nouveau compte</b><div class="row">
   <label>Nom<input id="n_id" size="22"></label><label>N° de compte<input id="n_nbr" size="16"></label>
@@ -404,12 +409,18 @@ async function admin(msg = ''){
   <label>Devise<select id="m_cur">${[...new Set(m.currencies)].map(c => `<option ${c === m.master_currency ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
   <button onclick="setMaster()">Appliquer</button></div><div id="m_err" class="err"></div>
   <div class="mut" style="font-size:12px">Tous les montants, soldes et rendements sont recalculés ; la devise doit avoir des taux de change (l'euro n'en a pas besoin).</div></div>
+  <div class="card"><b>Format des nombres</b> <span class="mut">(tous les montants et pourcentages de l'application)</span><div class="row">
+  <label>Séparateur décimal<select id="nf_dec" onchange="numberFormatPreview()"><option value="."${f.decimal === '.' ? ' selected' : ''}>point ( . )</option><option value=","${f.decimal === ',' ? ' selected' : ''}>virgule ( , )</option></select></label>
+  <label>Séparateur des milliers<input id="nf_th" size="3" value="${esc(f.thousands)}" placeholder="aucun" autocomplete="off" oninput="numberFormatPreview()"></label>
+  <span class="mut">Aperçu : <b class="d" id="nf_preview"></b></span><button onclick="setNumberFormatting()">Appliquer</button></div><div id="nf_err" class="err"></div>
+  <div class="mut" style="font-size:12px">Séparateur des milliers : laisser vide pour aucun, ou saisir un seul caractère (espace, apostrophe, point, virgule…), différent du séparateur décimal.</div></div>
   <div class="card"><b>Taux de change</b> <span class="mut">(unités de devise pour 1 € ; l'euro sert de pivot)</span><div class="row">
   <label>Devise<select id="x_cur" onchange="fxList()">${m.currencies.filter(c => c !== 'EUR').map(c => `<option>${c}</option>`).join('')}</select></label>
   <label>Date<input type="date" id="x_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Taux<input id="x_rate" size="8"></label><button onclick="addFx()">Ajouter</button></div>
   <div class="row"><button onclick="refreshRates()">Mettre à jour depuis Internet</button><span id="fx_status" class="mut"></span></div>
   <div class="mut" style="font-size:12px">Un taux par semaine (taux de référence de la BCE, via frankfurter.dev), depuis la plus ancienne donnée de chaque devise. Les semaines qui ont déjà un taux ne sont pas modifiées. Mise à jour automatique au démarrage de l'application si Internet est disponible ; les soldes sont alors recalculés.</div>
   <div id="fxl"></div></div>`;
+  numberFormatPreview();
   await fxList();
 }
 async function setMaster(){
@@ -418,6 +429,18 @@ async function setMaster(){
     META = null;
     await admin('Devise principale modifiée : tous les montants ont été recalculés');
   } catch (e) { $('#m_err').textContent = e.message; }
+}
+const NUMBER_SAMPLE = -1234567.891;   // shown with the chosen separators, to see the result before applying them
+function numberFormatPreview(){
+  const format = {decimal: $('#nf_dec').value, thousands: $('#nf_th').value};
+  $('#nf_preview').textContent = formatNumber(NUMBER_SAMPLE, 2, 2, format) + ' ' + sym(MASTER);
+}
+async function setNumberFormatting(){
+  try {
+    await api('number_format', 'POST', {decimal: $('#nf_dec').value, thousands: $('#nf_th').value});
+    META = null;
+    await admin('Format des nombres modifié');
+  } catch (e) { $('#nf_err').textContent = e.message; }
 }
 async function refreshRates(){
   $('#fx_status').textContent = 'Mise à jour en cours…';
@@ -429,7 +452,7 @@ async function refreshRates(){
 }
 async function fxList(){
   const cur = $('#x_cur').value, rows = await api('fx?currency=' + cur);
-  const fxRow = r => `<tr><td>${r.date}</td><td class="n">${r.rate}</td></tr>`;
+  const fxRow = r => `<tr><td>${r.date}</td><td class="n">${formatNumber(r.rate, 0, 6)}</td></tr>`;
   $('#fxl').innerHTML = '<table>' + rows.slice(0, 12).map(fxRow).join('') + '</table>';
 }
 async function addFx(){ try { await api('fx', 'POST', {currency: $('#x_cur').value, date: $('#x_date').value, rate: $('#x_rate').value.replace(',', '.')}); await fxList(); } catch (e) { await errorDialog(e.message); } }

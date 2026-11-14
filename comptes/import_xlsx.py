@@ -7,7 +7,7 @@ Values are read from the workbook's cached results (data_only), so history is
 migrated exactly as Excel computed it. Formulas are inspected only to detect how
 each account is maintained (mode: flow / snapshot / shares / static).
 """
-import sys, os, datetime as dt
+import sys, os, sqlite3, datetime as dt
 import openpyxl
 from .db import connect, DEFAULT_DB
 
@@ -146,8 +146,26 @@ def read_interests(wbv, con):
                         (r[0], r[1].isoformat(), *v))
 
 
+KEPT_SETTINGS = ("decimal_separator", "thousands_separator")   # display preferences: not in the workbook, kept over a re-import
+
+
+def kept_settings(dbpath):
+    """The display settings of the database about to be replaced"""
+    if not os.path.exists(dbpath):
+        return {}
+    old = sqlite3.connect(dbpath)
+    try:
+        marks = ",".join("?" * len(KEPT_SETTINGS))
+        return dict(old.execute(f"SELECT key,value FROM params WHERE key IN ({marks})", KEPT_SETTINGS).fetchall())
+    except sqlite3.Error:   # no params table: a very old database
+        return {}
+    finally:
+        old.close()
+
+
 def main(xlsm, dbpath=None):
     dbpath = dbpath or DEFAULT_DB
+    kept = kept_settings(dbpath)
     if os.path.exists(dbpath):
         os.remove(dbpath)
     con = connect(dbpath)
@@ -163,6 +181,7 @@ def main(xlsm, dbpath=None):
         n, nd = import_account(name, wbv, wbf, con)
         print(f"{name}: {n} transactions, {nd} deposits", flush=True)
     read_interests(wbv, con)
+    con.executemany("INSERT OR REPLACE INTO params VALUES(?,?)", kept.items())
     con.commit()
     if UNDATED:
         print(f"WARNING: {len(UNDATED)} rows had no date in the workbook; they were dated like the previous row:")
