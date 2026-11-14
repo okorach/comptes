@@ -185,7 +185,8 @@ function interestsTable(interests, currency){
   return `<table>${rows}</table>`;
 }
 function depositRow(d, aid){
-  return `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_main)}</td><td><button class="link" onclick="delDep(${Number(d.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
+  const del = `delDep(${Number(d.id)},'${jsq(aid)}')`;
+  return `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_main)}</td><td class="s actions">${iconButton('trash', 'Supprimer', del)}</td></tr>`;
 }
 function depositsPanel(info, a, cur){
   return `<div class="pane"><h3>Rendements nets</h3>${interestsTable(info.interests, a.currency)}

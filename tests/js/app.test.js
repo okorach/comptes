@@ -641,3 +641,12 @@ test('the transaction rows have a pen and a trash icon instead of the words modi
   assert.match(buttons[0][3], /^editTx\(/);
   assert.equal(buttons[1][3], "delTx(1,'Suisse')");
 });
+
+test('the deposits have a trash icon instead of suppr.', async () => {
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR'}
+    : {account: {id: 'Livret', type: 'Livret A', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: [{id: 5, date: '2024-01-01', amount_main: 100}]})}));
+  await ctx.account('Livret');
+  const row = els['#main'].innerHTML.match(/<tr><td>2024-01-01<\/td><td class="n">100,00[^<]*<\/td>.*?<\/tr>/s)[0];
+  assert.doesNotMatch(row, /suppr\./);
+  assert.match(row, /<button class="icon" title="Supprimer" aria-label="Supprimer" onclick="delDep\(5,'Livret'\)"><svg/);
+});
