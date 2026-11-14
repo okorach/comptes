@@ -845,13 +845,36 @@ test('the account page asks for all the transactions, not only the latest ones',
   assert.doesNotMatch(html, /plus récentes/);
 });
 
-test('the yields table has no filter on the « Calculé le » column, but is still sortable on it', async () => {
-  const row = {account: 'A', type: 'Livret', status: 'Open', currency: 'EUR', calc_date: '2024-05-01T10:00:00', y1: 0.02, n1: null, y3: null, n3: null, y5: null, n5: null, y8: null, n8: null, y_all: null, n_all: null};
-  const {ctx, els} = load(async url => ({json: async () => (url.includes('interests') ? [row, {...row, account: 'B', calc_date: '2024-05-02T10:00:00'}] : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+const yieldRow = (account, calc_date, status = 'Open') => ({account, type: 'Livret', status, currency: 'EUR', calc_date, y1: 0.02, n1: null, y3: null, n3: null, y5: null, n5: null, y8: null, n8: null, y_all: null, n_all: null});
+
+test('the yields table has no « Calculé le » column', async () => {
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('interests') ? [yieldRow('A', todayIso())] : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
   await ctx.interests();
   const html = els['#main'].innerHTML;
-  const filters = [...html.match(/<tr class="filters">(.*?)<\/tr>/s)[1].matchAll(/aria-label="Filtrer ([^"]+)"/g)].map(m => m[1]);
-  assert.ok(filters.includes('Compte') && filters.includes('Type'));
-  assert.ok(!filters.includes('Calculé le'));
-  assert.match(html, /aria-label="Trier par Calculé le"/);
+  assert.doesNotMatch(html, /Calculé le<|Trier par Calculé le|Filtrer Calculé le/);
+  assert.equal((html.match(/<thead><tr>(.*?)<\/tr>/s)[1].match(/<th[ >]/g) || []).length, 7);   // Compte, Type and the five periods
+});
+
+test('the account is red when its yields were not calculated for more than 1 month, orange for more than 15 days', () => {
+  const {get} = load(), lateness = get('calcLateness');
+  const today = new Date(2024, 5, 15);   // 2024-06-15
+  const level = (calc_date, status = 'Open') => lateness({status, calc_date}, today);
+  assert.equal(level('2024-05-14T10:00:00'), 'late-3');
+  assert.equal(level('2024-05-15T10:00:00'), 'late-1');   // exactly 1 month: not more than a month
+  assert.equal(level('2024-05-30T23:59:00'), 'late-1');
+  assert.equal(level('2024-05-31T00:00:00'), '');          // exactly 15 days: not more
+  assert.equal(level('2024-06-14T08:00:00'), '');
+  assert.equal(level('2023-01-01T00:00:00', 'Closed'), '');   // a closed account is not recalculated
+  assert.equal(level(null), '');
+});
+
+test('a late account is coloured and its tooltip gives the date of the calculation', async () => {
+  const red = todayIso(2), orange = (() => { const d = new Date(); d.setDate(d.getDate() - 20); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })(), fresh = todayIso(0);
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('interests') ? [yieldRow('Rouge', red + 'T09:00:00'), yieldRow('Orange', orange + 'T09:00:00'), yieldRow('Frais', fresh + 'T09:00:00')]
+    : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await ctx.interests();
+  const html = els['#main'].innerHTML;
+  assert.match(html, new RegExp(`<td class="late-3" title="Calculé le: ${red}">Rouge</td>`));
+  assert.match(html, new RegExp(`<td class="late-1" title="Calculé le: ${orange}">Orange</td>`));
+  assert.match(html, /<td class="" title="">Frais<\/td>/);
 });

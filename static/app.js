@@ -171,11 +171,19 @@ const rateHtml = (v, native, currency) => {
   if (v == null) return '<span class="mut">–</span>';
   return `<span class="${v < 0 ? 'neg' : ''}">${pct(v)}</span>${nativeRateHtml(native, currency)}`;
 };
-const calcDate = r => (r.calc_date || '').replace('T', ' ').slice(0, 16);
-const interestRow = r => `<tr class="click" onclick="location.hash='#/account/${enc(r.account)}'"><td>${esc(r.account)}</td><td>${esc(r.type)}</td><td>${calcDate(r)}</td>${rateCells(r)}</tr>`;
+/* Yields of an open account not recalculated for more than 1 month ('late-3', red) or more than 15 days ('late-1', orange) */
+function calcLateness(r, today = new Date()){
+  if (r.status !== 'Open' || !r.calc_date) return '';
+  const before = shift => { const d = new Date(today); shift(d); return isoDay(d); };
+  const last = r.calc_date.slice(0, 10);
+  if (last < before(d => d.setMonth(d.getMonth() - 1))) return 'late-3';
+  return last < before(d => d.setDate(d.getDate() - 15)) ? 'late-1' : '';
+}
+const calcTitle = r => calcLateness(r) ? 'Calculé le: ' + r.calc_date.slice(0, 10) : '';
+const interestRow = r => `<tr class="click" onclick="location.hash='#/account/${enc(r.account)}'"><td class="${calcLateness(r)}" title="${esc(calcTitle(r))}">${esc(r.account)}</td><td>${esc(r.type)}</td>${rateCells(r)}</tr>`;
 const rateCells = r => Object.entries(NATIVE_KEY).map(([y, n]) => `<td class="n">${rateHtml(r[y], r[n], r.currency)}</td>`).join('');
 const INTEREST_COLUMNS = [
-  {label: 'Compte', value: r => r.account}, {label: 'Type', value: r => r.type}, {label: 'Calculé le', filter: false, value: r => calcDate(r)},
+  {label: 'Compte', value: r => r.account}, {label: 'Type', value: r => r.type},
   ...INTEREST_PERIODS.map(([label, key]) => ({label, num: true, filter: false, value: r => r[key]})),
 ];
 
