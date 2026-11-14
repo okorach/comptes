@@ -523,3 +523,17 @@ test('the accounts table is filterable by type and bank only, and sortable on ev
   assert.deepEqual([...filters.matchAll(/aria-label="Filtrer ([^"]+)"/g)].map(m => m[1]), ['Type', 'Banque']);
   assert.equal((html.match(/class="sort"/g) || []).length, 5);
 });
+
+test('the accounts table ends with the total of the balance in the master currency, of the filtered accounts only', async () => {
+  const acc = (id, bank, type, balance_main) => ({id, status: 'Open', type, bank, availability: 0, last_date: todayIso(), currency: 'EUR', balance_main, balance_native: balance_main});
+  const {ctx, els, get} = masterPage('EUR', {accounts: [acc('A', 'X', 'Livret', 100), acc('B', 'Y', 'PEA', 250.5), acc('C', 'X', 'PEA', -50)]});
+  await ctx.home();
+  const total = () => plain(els['#main'].innerHTML.match(/<tfoot[^>]*>(.*?)<\/tfoot>/s)[1]);
+  assert.match(total(), /<tr class="total"><td class="s">Total<\/td><td class="n ">300,50 €<\/td><td><\/td><td><\/td><td><\/td><\/tr>/);
+  const id = Number(els['#main'].innerHTML.match(/id="tb-(\d+)"/)[1]);
+  const bank = get('tables').get(id).cols.findIndex(c => c.label === 'Banque');
+  ctx.tableFilter(id, bank, String(get('tables').get(id).cols[bank].options.indexOf('X')));   // only the accounts of bank X
+  assert.match(plain(els[`#tf-${id}`].innerHTML), /<td class="n ">50,00 €<\/td>/);
+  ctx.tableFilter(id, bank, '');
+  assert.match(plain(els[`#tf-${id}`].innerHTML), /300,50 €/);
+});
