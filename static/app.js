@@ -379,9 +379,10 @@ async function importPreview(id){
     const r = await api('account/' + enc(id) + '/import', 'POST', IMPORT);
     const previewRow = p => `<tr><td>${p.date}</td><td class="n ${cls(p.amount)}">${num(p.amount)}</td><td>${esc(p.description)}</td></tr>`;
     const preview = r.new.slice(0, 200).map(previewRow).join('');
+    const list = r.new.length ? `<div class="scroll" style="max-height:240px;overflow-y:auto"><table>${preview}</table></div>
+    <button class="primary" onclick="importCommit('${jsq(id)}')">Importer ${r.new.length} écritures</button>` : '';
     $('#imp').innerHTML = `<div class="card"><b>Import de ${esc(f.name)}</b> : ${r.new.length} nouvelle(s) écriture(s), ${r.duplicates} doublon(s) ignoré(s).
-    ${r.new.length ? `<div class="scroll" style="max-height:240px;overflow-y:auto"><table>${preview}</table></div>
-    <button class="primary" onclick="importCommit('${jsq(id)}')">Importer ${r.new.length} écritures</button>` : ''}<button onclick="$('#imp').innerHTML=''">Fermer</button></div>`;
+    ${list}<button onclick="$('#imp').innerHTML=''">Fermer</button></div>`;
   } catch (e) { $('#imp').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function importCommit(id){ const r = await api('account/' + enc(id) + '/import', 'POST', {...IMPORT, commit: true}); await account(id, `${r.new.length} écritures importées`); }
