@@ -77,17 +77,22 @@ const homeColumns = () => [
   {label: 'Solde (devise)', num: true, filter: false, value: a => a.currency === MASTER ? null : a.balance_native}, {label: 'Type', value: a => a.type}, {label: 'Banque', value: a => a.bank},
 ];
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-/* Bubble right of the name of an open account with no transaction (no balance) for more than 3 months (orange) or more than 1 year (red);
-   its tooltip gives the last balance */
+/* Bubbles right of the name of an account, flagging what needs attention; red is the worse, orange the lesser. The tooltip gives the last update. */
+const bubble = (warn, text) => `<span class="stale-dot${warn ? ' warn' : ''}" role="img" title="${esc(text)}" aria-label="${esc(text)}"></span>`;
+const daysAgo = (today, shift) => { const d = new Date(today); shift(d); return isoDay(d); };
+/* Open account with no transaction (no balance) for more than 3 months (orange) or more than 1 year (red) */
 function staleBubble(a, today = new Date()){
   if (a.status !== 'Open') return '';
-  const before = shift => { const d = new Date(today); shift(d); return isoDay(d); };
-  const last = a.last_date ? a.last_date.slice(0, 10) : null;
-  let tone = '';   // no last date: never any transaction, the worst case
-  if (last && last >= before(d => d.setMonth(d.getMonth() - 3))) return '';
-  if (last && last >= before(d => d.setFullYear(d.getFullYear() - 1))) tone = ' warn';
-  const text = 'Dernière mise à jour: ' + (last ?? '–');
-  return `<span class="stale-dot${tone}" role="img" title="${esc(text)}" aria-label="${esc(text)}"></span>`;
+  const last = a.last_date ? a.last_date.slice(0, 10) : null;   // no last date: never any transaction, the worst case
+  if (last && last >= daysAgo(today, d => d.setMonth(d.getMonth() - 3))) return '';
+  return bubble(last !== null && last >= daysAgo(today, d => d.setFullYear(d.getFullYear() - 1)), 'Dernière mise à jour: ' + (last ?? '–'));
+}
+/* Open account whose yields were not recalculated for more than 1 month (red) or more than 15 days (orange) */
+function calcBubble(r, today = new Date()){
+  if (r.status !== 'Open' || !r.calc_date) return '';
+  const last = r.calc_date.slice(0, 10);
+  if (last >= daysAgo(today, d => d.setDate(d.getDate() - 15))) return '';
+  return bubble(last >= daysAgo(today, d => d.setMonth(d.getMonth() - 1)), 'Dernière mise à jour des rendements: ' + last);
 }
 /* Shown when hovering on the name of the account (replaces the old column) */
 const availabilityText = a => 'Disponibilité: ' + (a.availability || 'Immédiate');
@@ -175,7 +180,7 @@ const rateHtml = (v, native, currency) => {
   if (v == null) return '<span class="mut">–</span>';
   return `<span class="${v < 0 ? 'neg' : ''}">${pct(v)}</span>${nativeRateHtml(native, currency)}`;
 };
-const interestRow = r => `<tr class="click" onclick="location.hash='#/account/${enc(r.account)}'"><td>${esc(r.account)}${staleBubble(r)}</td><td>${esc(r.type)}</td>${rateCells(r)}</tr>`;
+const interestRow = r => `<tr class="click" onclick="location.hash='#/account/${enc(r.account)}'"><td>${esc(r.account)}${staleBubble(r)}${calcBubble(r)}</td><td>${esc(r.type)}</td>${rateCells(r)}</tr>`;
 const rateCells = r => Object.entries(NATIVE_KEY).map(([y, n]) => `<td class="n">${rateHtml(r[y], r[n], r.currency)}</td>`).join('');
 const INTEREST_COLUMNS = [
   {label: 'Compte', value: r => r.account}, {label: 'Type', value: r => r.type},
