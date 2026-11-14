@@ -570,3 +570,12 @@ test('closed accounts have a grey row, and a balance that is never red nor -0', 
   assert.doesNotMatch(row('Ferme0'), /-0/);
   assert.doesNotMatch(row('FermeNeg'), /neg/);   // never red on a closed account
 });
+
+test('the « comptes ouverts seulement » checkbox is next to the title of the accounts table, not at the top of the page', async () => {
+  const {ctx, els} = masterPage('EUR');
+  await ctx.home();
+  const html = els['#main'].innerHTML;
+  assert.match(html, /<div class="title-row"><h3>Comptes<\/h3><label><input type="checkbox" id="openOnly" checked onchange="home\(\)"> comptes ouverts seulement<\/label><\/div>/);
+  assert.equal((html.match(/id="openOnly"/g) || []).length, 1);
+  assert.ok(html.indexOf('id="openOnly"') > html.indexOf('chart-'));   // below the chart
+});

@@ -64,11 +64,10 @@ async function home(){
   const tbl = rows => `<table>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="n ${cls(v)}">${num(v)}</td></tr>`).join('')}</table>`;
   const byYear = {}; shown.forEach(a => { const k = a.availability || 0; byYear[k] = (byYear[k] || 0) + a.balance_main; });
   $('#main').innerHTML = `<div class="mut">Patrimoine</div><div class="big">${num(total)}</div>
-  <label><input type="checkbox" id="openOnly" ${open ? 'checked' : ''} onchange="home()"> comptes ouverts seulement</label>
   ${drawChart(nw.map(p => p.month), [
     {name: `Épargne mensuelle (moy. ${SAVINGS_MONTHS} mois)`, color: 'var(--pos-light)', type: 'bar', axis: 'right', unit: sym(MASTER) + '/mois', values: monthlySavings(nw.map(p => p.total))},
     {name: 'Patrimoine', color: 'var(--acc)', type: 'line', values: nw.map(p => p.total)}], {xticks: 12, unit: sym(MASTER)})}
-  <h3>Comptes</h3>${dataTable(homeColumns(), shown.sort((a, b) => b.balance_main - a.balance_main), homeRow, {noun: 'comptes', footer: homeTotal})}
+  <div class="title-row"><h3>Comptes</h3><label><input type="checkbox" id="openOnly" ${open ? 'checked' : ''} onchange="home()"> comptes ouverts seulement</label></div>${dataTable(homeColumns(), shown.sort((a, b) => b.balance_main - a.balance_main), homeRow, {noun: 'comptes', footer: homeTotal})}
   <div class="row" style="align-items:start">${paneStart('bank', 'Par banque')}${tbl(sumBy(a => a.bank))}</details>
   ${paneStart('year', 'Par année de disponibilité')}${tbl(Object.entries(byYear).sort((a, b) => a[0] - b[0]).map(([k, v]) => [k === '0' ? 'Immédiate' : k, v]))}</details>
   ${paneStart('type', 'Par type')}${tbl(sumBy(a => a.type))}</details></div>`;
