@@ -844,3 +844,14 @@ test('the account page asks for all the transactions, not only the latest ones',
   assert.equal((html.match(/<tr id="tx-/g) || []).length, 1200);
   assert.doesNotMatch(html, /plus récentes/);
 });
+
+test('the yields table has no filter on the « Calculé le » column, but is still sortable on it', async () => {
+  const row = {account: 'A', type: 'Livret', status: 'Open', currency: 'EUR', calc_date: '2024-05-01T10:00:00', y1: 0.02, n1: null, y3: null, n3: null, y5: null, n5: null, y8: null, n8: null, y_all: null, n_all: null};
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('interests') ? [row, {...row, account: 'B', calc_date: '2024-05-02T10:00:00'}] : url.endsWith('/meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await ctx.interests();
+  const html = els['#main'].innerHTML;
+  const filters = [...html.match(/<tr class="filters">(.*?)<\/tr>/s)[1].matchAll(/aria-label="Filtrer ([^"]+)"/g)].map(m => m[1]);
+  assert.ok(filters.includes('Compte') && filters.includes('Type'));
+  assert.ok(!filters.includes('Calculé le'));
+  assert.match(html, /aria-label="Trier par Calculé le"/);
+});

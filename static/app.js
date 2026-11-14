@@ -175,7 +175,7 @@ const calcDate = r => (r.calc_date || '').replace('T', ' ').slice(0, 16);
 const interestRow = r => `<tr class="click" onclick="location.hash='#/account/${enc(r.account)}'"><td>${esc(r.account)}</td><td>${esc(r.type)}</td><td>${calcDate(r)}</td>${rateCells(r)}</tr>`;
 const rateCells = r => Object.entries(NATIVE_KEY).map(([y, n]) => `<td class="n">${rateHtml(r[y], r[n], r.currency)}</td>`).join('');
 const INTEREST_COLUMNS = [
-  {label: 'Compte', value: r => r.account}, {label: 'Type', value: r => r.type}, {label: 'Calculé le', value: r => calcDate(r)},
+  {label: 'Compte', value: r => r.account}, {label: 'Type', value: r => r.type}, {label: 'Calculé le', filter: false, value: r => calcDate(r)},
   ...INTEREST_PERIODS.map(([label, key]) => ({label, num: true, filter: false, value: r => r[key]})),
 ];
 
