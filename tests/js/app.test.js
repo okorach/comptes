@@ -474,15 +474,41 @@ test('the blocks by category and by period of the spending page are collapsible,
   assert.doesNotMatch(html, /<details[^>]* open/);
 });
 
-test('the availability is no longer a column: it shows when hovering on the name of the account', async () => {
+const todayIso = (monthsAgo = 0) => { const d = new Date(); d.setMonth(d.getMonth() - monthsAgo); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
+test('availability and last date are no longer columns: they show when hovering on the name of the account', async () => {
   const {ctx, els} = masterPage('EUR', {accounts: [
-    {id: 'PER', status: 'Open', type: 'Livret', bank: 'B', availability: 2035, last_date: '2024-01-01', currency: 'EUR', balance_main: 10, balance_native: 10},
-    {id: 'Courant', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: '2024-01-01', currency: 'EUR', balance_main: 5, balance_native: 5}]});
+    {id: 'PER', status: 'Open', type: 'Livret', bank: 'B', availability: 2035, last_date: todayIso(), currency: 'EUR', balance_main: 10, balance_native: 10},
+    {id: 'Courant', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: todayIso(), currency: 'EUR', balance_main: 5, balance_native: 5}]});
   await ctx.home();
   const html = els['#main'].innerHTML;
-  assert.doesNotMatch(html, /Dispo\./);
-  assert.match(html, /<td title="Disponibilité: 2035">PER<\/td>/);
-  assert.match(html, /<td title="Disponibilité: Immédiate">Courant<\/td>/);
-  const row = html.match(/<tr class="click"[^>]*><td title="Disponibilité: 2035">.*?<\/tr>/s)[0];
-  assert.equal((row.match(/<td/g) || []).length, 6);   // name, type, bank, last date, native balance, balance
+  assert.doesNotMatch(html, /Dispo\.|Dernière date/);
+  assert.match(html, /<td class="" title="Disponibilité: 2035">PER<\/td>/);
+  assert.match(html, /<td class="" title="Disponibilité: Immédiate">Courant<\/td>/);
+  const row = html.match(/<tr class="click"[^>]*><td class="" title="Disponibilité: 2035">.*?<\/tr>/s)[0];
+  assert.equal((row.match(/<td/g) || []).length, 5);   // name, type, bank, native balance, balance
+});
+
+test('an open account not updated for more than 3 months is red, more than 1 month orange, else normal', () => {
+  const {ctx} = load();
+  const today = new Date(2024, 5, 15);   // 2024-06-15
+  const level = (last_date, status = 'Open') => ctx.lateness({status, last_date}, today);
+  assert.equal(level('2024-03-14'), 'late-3');
+  assert.equal(level('2024-03-15'), 'late-1');    // exactly 3 months: not more
+  assert.equal(level('2024-05-14'), 'late-1');
+  assert.equal(level('2024-05-15'), '');          // exactly 1 month: not more
+  assert.equal(level('2024-06-10'), '');
+  assert.equal(level('2023-01-01', 'Closed'), '');   // a closed account is not late
+  assert.equal(level(null), '');
+});
+
+test('a late account name is coloured and its tooltip adds the last update', async () => {
+  const old = todayIso(5), mid = todayIso(2), fresh = todayIso(0);
+  const acc = (id, last_date) => ({id, status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date, currency: 'EUR', balance_main: 5, balance_native: 5});
+  const {ctx, els} = masterPage('EUR', {accounts: [acc('Rouge', old), acc('Orange', mid), acc('Frais', fresh)]});
+  await ctx.home();
+  const html = els['#main'].innerHTML;
+  assert.match(html, new RegExp(`<td class="late-3" title="Disponibilité: Immédiate\nDernière mise à jour: ${old}">Rouge</td>`));
+  assert.match(html, new RegExp(`<td class="late-1" title="Disponibilité: Immédiate\nDernière mise à jour: ${mid}">Orange</td>`));
+  assert.match(html, /<td class="" title="Disponibilité: Immédiate">Frais<\/td>/);
 });

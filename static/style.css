@@ -1,5 +1,5 @@
-:root{--font:Roboto,system-ui,sans-serif;--font-data:"Roboto Condensed",Roboto,system-ui,sans-serif;--bg:#fff;--fg:#1c1f24;--mut:#6b7280;--line:#e5e7eb;--acc:#2563eb;--neg:#b91c1c;--pos:#15803d;--pos-light:#4ade80;--card:#f8fafc}
-@media(prefers-color-scheme:dark){:root{--bg:#14171c;--fg:#e6e8eb;--mut:#9aa3af;--line:#2a2f37;--acc:#60a5fa;--neg:#f87171;--pos:#4ade80;--pos-light:#86efac;--card:#1b1f26}}
+:root{--font:Roboto,system-ui,sans-serif;--font-data:"Roboto Condensed",Roboto,system-ui,sans-serif;--bg:#fff;--warn:#c2410c;--fg:#1c1f24;--mut:#6b7280;--line:#e5e7eb;--acc:#2563eb;--neg:#b91c1c;--pos:#15803d;--pos-light:#4ade80;--card:#f8fafc}
+@media(prefers-color-scheme:dark){:root{--bg:#14171c;--warn:#fb923c;--fg:#e6e8eb;--mut:#9aa3af;--line:#2a2f37;--acc:#60a5fa;--neg:#f87171;--pos:#4ade80;--pos-light:#86efac;--card:#1b1f26}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;font:14px var(--font);background:var(--bg);color:var(--fg)}
@@ -15,6 +15,7 @@ th{color:var(--mut);font-weight:600;white-space:nowrap} td.n,th.n{text-align:rig
 /* Roboto for what is fixed (labels, titles, buttons, filters); Roboto Condensed for what comes from the data (numbers, dates, accounts, categories...) */
 td,.d,.big,svg text,.chart-window,.chart-tip b,.chart-tip .mut{font-family:var(--font-data)}
 td.s,td a,td button{font-family:var(--font)}
+td.late-3{color:var(--neg)} td.late-1{color:var(--warn)}
 tr.hl td{background:rgba(255,190,0,.28)}
 tr.click{cursor:pointer} tr.click:hover{background:rgba(127,127,127,.1)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0}
