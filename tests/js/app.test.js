@@ -922,3 +922,52 @@ test('the overview has no bubble for the yields', async () => {
   await ctx.home();
   assert.doesNotMatch(els['#main'].innerHTML, /stale-dot|des rendements/);
 });
+
+/* ---------------------------------------------------------------- pages built from rows (refactored templates) */
+test('the spending page shows the category x period matrix, escaped, with the amounts rounded and the missing ones empty', async () => {
+  const report = {categories: [{category: 'A<b>', total: 10, pct: 1}], series: [{period: '2024-01', spread: 1, raw: 1, avg12: 1}, {period: '2024-02', spread: 2, raw: 2, avg12: 2}],
+    matrix: {'A<b>': {'2024-01': 1234.56, '2024-02': null}}, excluded: [], all_categories: ['A<b>']};
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('spending') ? report : url.includes('meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await settle();
+  await ctx.spending();
+  const html = plain(els['#main'].innerHTML);
+  assert.match(html, /<tr><td>A&lt;b&gt;<\/td><td class="n">1 235<\/td><td class="n"><\/td><\/tr>/);
+  assert.doesNotMatch(html, /A<b>/);
+});
+
+test('the import preview lists the new entries (200 at most), escaped', async () => {
+  const entries = Array.from({length: 250}, (_, i) => ({date: '2024-01-01', amount: i % 2 ? -5 : 5, description: i === 0 ? '<i>x</i>' : 'd' + i}));
+  const {ctx, els, mk} = load(async () => ({json: async () => ({new: entries, duplicates: 3})}));
+  mk('#imp_file').files = [{name: 'a.csv', arrayBuffer: async () => new Uint8Array([1, 2, 200, 255]).buffer}];
+  mk('#imp_bank').value = 'generic';
+  await ctx.importPreview('X');
+  const html = plain(els['#imp'].innerHTML);
+  assert.match(html, /250 nouvelle\(s\) écriture\(s\), 3 doublon\(s\) ignoré\(s\)/);
+  assert.equal((html.match(/<tr><td>2024-01-01<\/td>/g) || []).length, 200);
+  assert.match(html, /<td>&lt;i&gt;x&lt;\/i&gt;<\/td>/);
+  assert.match(html, /Importer 250 écritures/);
+});
+
+test('the list of the exchange rates shows the latest 12, and the amounts of an import go through base 64 unchanged', async () => {
+  const rates = Array.from({length: 20}, (_, i) => ({date: '2024-01-' + String(i + 1).padStart(2, '0'), rate: 1 + i / 10}));
+  const {ctx, els, mk} = load(async () => ({json: async () => rates}));
+  mk('#x_cur').value = 'CHF';
+  await ctx.fxList();
+  assert.equal((els['#fxl'].innerHTML.match(/<tr>/g) || []).length, 12);
+  assert.match(els['#fxl'].innerHTML, /^<table><tr><td>2024-01-01<\/td><td class="n">1<\/td><\/tr>/);
+});
+
+test('unticking and ticking a category of the spending page keeps at least an empty exclusion', async () => {
+  const calls = [];
+  const report = {categories: [], series: [], matrix: {}, excluded: [], all_categories: ['A']};
+  const {ctx} = load(async url => { calls.push(url); return {json: async () => (url.includes('spending') ? report : url.includes('meta') ? {categories: [], master_currency: 'EUR'} : [])}; });
+  await settle();
+  calls.length = 0;
+  ctx.toggleCat('A', false);
+  await settle();
+  assert.ok(calls.some(u => u.includes('exclude=A')));
+  calls.length = 0;
+  ctx.toggleCat('A', true);
+  await settle();
+  assert.ok(calls.some(u => /exclude=(&|$)/.test(u)));   // nothing excluded: an empty list, not the default exclusion
+});
