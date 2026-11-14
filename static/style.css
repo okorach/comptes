@@ -36,6 +36,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 @keyframes modal-pop{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.modal-back,.modal{animation:none}}
 .native-rate{display:block}  /* yield in the currency of the account, below the one in the master currency */
+.stale-dot.warn{background:var(--warn)}
 .stale-dot{display:inline-block;width:9px;height:9px;margin-left:7px;border-radius:50%;background:var(--neg);vertical-align:middle;cursor:help}
 tr.closed{background:rgba(127,127,127,.14)}  /* closed accounts, shown when « comptes ouverts seulement » is unticked */
 tr.click{cursor:pointer} tr.click:hover{background:rgba(127,127,127,.1)}

@@ -85,16 +85,17 @@ function lateness(a, today = new Date()){
   if (last < before(3)) return 'late-3';
   return last < before(1) ? 'late-1' : '';
 }
-/* Red bubble right of the name of an open account with no transaction (no balance) for more than 1 year; its tooltip gives the last balance */
-const STALE_BUBBLE = 'stale-dot';
+/* Bubble right of the name of an open account with no transaction (no balance) for more than 3 months (orange) or more than 1 year (red);
+   its tooltip gives the last balance */
 function staleBubble(a, today = new Date()){
   if (a.status !== 'Open') return '';
-  const limit = new Date(today);
-  limit.setFullYear(limit.getFullYear() - 1);
+  const before = shift => { const d = new Date(today); shift(d); return isoDay(d); };
   const last = a.last_date ? a.last_date.slice(0, 10) : null;
-  if (last && last >= isoDay(limit)) return '';
-  const text = 'Last balance: ' + (last ?? '–');
-  return `<span class="${STALE_BUBBLE}" role="img" title="${esc(text)}" aria-label="${esc(text)}"></span>`;
+  let tone = '';   // no last date: never any transaction, the worst case
+  if (last && last >= before(d => d.setMonth(d.getMonth() - 3))) return '';
+  if (last && last >= before(d => d.setFullYear(d.getFullYear() - 1))) tone = ' warn';
+  const text = 'Dernier solde: ' + (last ?? '–');
+  return `<span class="stale-dot${tone}" role="img" title="${esc(text)}" aria-label="${esc(text)}"></span>`;
 }
 /* Shown when hovering on the name of the account (replaces the old columns): availability, and last update when it is late */
 const availabilityText = a => 'Disponibilité: ' + (a.availability || 'Immédiate') + (lateness(a) ? '\nDernière mise à jour: ' + a.last_date.slice(0, 10) : '');
