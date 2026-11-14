@@ -6,9 +6,14 @@ const {load} = require('./helpers');
 const STATIC = path.join(__dirname, '..', '..', 'static');
 const read = f => fs.readFileSync(path.join(STATIC, f), 'utf8');
 
-test('the page loads Roboto and Roboto Condensed', () => {
-  const html = read('index.html');
-  assert.match(html, /fonts\.googleapis\.com\/css2\?family=Roboto:wght@[^"&]*&family=Roboto\+Condensed:wght@/);
+test('the page loads Roboto and Roboto Condensed from the application itself, not from the internet', () => {
+  assert.match(read('index.html'), /<link rel="stylesheet" href="\/fonts\.css">/);
+  assert.doesNotMatch(read('index.html'), /googleapis|gstatic/);
+  const css = read('fonts.css');
+  for (const family of ['Roboto', 'Roboto Condensed']) assert.match(css, new RegExp(`font-family: '${family}'`));
+  const files = [...css.matchAll(/url\(\/fonts\/([^)]+)\)/g)].map(m => m[1]);
+  assert.equal(files.length, 4);
+  for (const f of files) assert.ok(fs.statSync(path.join(STATIC, 'fonts', f)).size > 10000, f);
 });
 
 test('static text is in Roboto, data (cells, numbers, chart labels, dynamic names) in Roboto Condensed', () => {
