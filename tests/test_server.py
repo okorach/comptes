@@ -1,4 +1,5 @@
 import base64
+import datetime as dt
 import json
 import os
 import threading
@@ -124,6 +125,15 @@ class ServerTest(unittest.TestCase):
         finally:
             self.con.execute("DELETE FROM transactions WHERE description='bulk'")
             self.con.commit()
+
+    def test_the_yields_are_recomputed_when_the_page_asks_for_them(self):
+        self.con.execute("INSERT OR REPLACE INTO interests(account,calc_date) VALUES('Epargne','2000-01-01T00:00:00')")
+        self.con.commit()
+        rows = {r["account"]: r for r in self.call("GET", "/api/interests")}
+        self.assertTrue(rows["Epargne"]["calc_date"].startswith(dt.date.today().isoformat()))
+        self.assertTrue(all(r["calc_date"].startswith(dt.date.today().isoformat()) for r in rows.values() if r["status"] == "Open"))
+        self.con.execute("DELETE FROM interests")
+        self.con.commit()
 
     def test_interests_tell_the_date_of_the_last_transaction_of_the_account(self):
         self.con.execute("INSERT OR REPLACE INTO interests(account) VALUES('Courant')")
