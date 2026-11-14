@@ -240,7 +240,9 @@ test('only the accounts that are not in the master currency show their balance i
   const {ctx, els} = masterPage('CHF');
   await ctx.home();
   const rows = plain(els['#main'].innerHTML).match(/<tr class="click".*?<\/tr>/gs);
-  assert.match(rows.find(r => r.includes('Courant')), /100,00 €<\/td><td class="n ">200,00 CHF/);   // EUR account: native balance shown
+  assert.match(rows.find(r => r.includes('Courant')), /200,00 CHF<\/td><td class="n mut">100,00 €<\/td>/);   // EUR account: native balance shown, after the balance in the master currency
+  const heads = [...els['#main'].innerHTML.match(/<table class="data"><thead><tr>(.*?)<\/tr>/s)[1].matchAll(/<th[^>]*>([^<]*?)(?: <button|<\/th>)/g)].map(m => m[1]);
+  assert.deepEqual(heads, ['Compte', 'Solde CHF', 'Solde (devise)', 'Type', 'Banque']);
   assert.doesNotMatch(rows.find(r => r.includes('Suisse')), /<td class="n mut">[^<\s]/);                // CHF account: it is the master currency
 });
 
@@ -511,4 +513,13 @@ test('a late account name is coloured and its tooltip adds the last update', asy
   assert.match(html, new RegExp(`<td class="late-3" title="Disponibilité: Immédiate\nDernière mise à jour: ${old}">Rouge</td>`));
   assert.match(html, new RegExp(`<td class="late-1" title="Disponibilité: Immédiate\nDernière mise à jour: ${mid}">Orange</td>`));
   assert.match(html, /<td class="" title="Disponibilité: Immédiate">Frais<\/td>/);
+});
+
+test('the accounts table is filterable by type and bank only, and sortable on every column', async () => {
+  const {ctx, els} = masterPage('EUR');
+  await ctx.home();
+  const html = els['#main'].innerHTML;
+  const filters = html.match(/<tr class="filters">(.*?)<\/tr>/s)[1];
+  assert.deepEqual([...filters.matchAll(/aria-label="Filtrer ([^"]+)"/g)].map(m => m[1]), ['Type', 'Banque']);
+  assert.equal((html.match(/class="sort"/g) || []).length, 5);
 });
