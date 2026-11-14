@@ -1,5 +1,14 @@
 const $ = s => document.querySelector(s);
-const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* HTML escaping of a text (for the content of an element or of a double-quoted attribute). A text with nothing to escape is returned
+   as it is (checked by the anchored pattern); otherwise the browser escapes it: set as the text of a node, read back as HTML. */
+const ESC_NODE = document.createElement('span');
+const esc = s => {
+  const text = String(s ?? '');
+  const plain = text.match(/^[^&<>"]*$/g);
+  if (plain) return plain[0];
+  ESC_NODE.textContent = text;
+  return ESC_NODE.innerHTML.replaceAll('"', '&quot;');
+};
 let MASTER = 'EUR';  // master currency of the application: totals, balances and yields of all the accounts are in it
 /* An amount that rounds to 0 is shown as 0, never as -0 (and not as negative: see cls) */
 const cents = v => Math.round(v * 100) / 100 === 0 ? 0 : v;
