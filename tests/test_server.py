@@ -125,6 +125,15 @@ class ServerTest(unittest.TestCase):
             self.con.execute("DELETE FROM transactions WHERE description='bulk'")
             self.con.commit()
 
+    def test_interests_tell_the_date_of_the_last_transaction_of_the_account(self):
+        self.con.execute("INSERT OR REPLACE INTO interests(account) VALUES('Courant')")
+        self.con.commit()
+        rows = {r["account"]: r for r in self.call("GET", "/api/interests")}
+        last = self.con.execute("SELECT MAX(date) FROM transactions WHERE account='Courant' AND date<=date('now')").fetchone()[0]
+        self.assertEqual(rows["Courant"]["last_date"], last)
+        self.con.execute("DELETE FROM interests WHERE account='Courant'")
+        self.con.commit()
+
     def test_import_preview(self):
         csv = "d;a;b;c\n2024-03-01;x;SHOP;-3,10\n".encode()
         res = self.call("POST", "/api/account/Courant/import",

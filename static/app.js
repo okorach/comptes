@@ -85,6 +85,17 @@ function lateness(a, today = new Date()){
   if (last < before(3)) return 'late-3';
   return last < before(1) ? 'late-1' : '';
 }
+/* Red bubble right of the name of an open account with no transaction (no balance) for more than 1 year; its tooltip gives the last balance */
+const STALE_BUBBLE = 'stale-dot';
+function staleBubble(a, today = new Date()){
+  if (a.status !== 'Open') return '';
+  const limit = new Date(today);
+  limit.setFullYear(limit.getFullYear() - 1);
+  const last = a.last_date ? a.last_date.slice(0, 10) : null;
+  if (last && last >= isoDay(limit)) return '';
+  const text = 'Last balance: ' + (last ?? '–');
+  return `<span class="${STALE_BUBBLE}" role="img" title="${esc(text)}" aria-label="${esc(text)}"></span>`;
+}
 /* Shown when hovering on the name of the account (replaces the old columns): availability, and last update when it is late */
 const availabilityText = a => 'Disponibilité: ' + (a.availability || 'Immédiate') + (lateness(a) ? '\nDernière mise à jour: ' + a.last_date.slice(0, 10) : '');
 /* Last line: total of the balances in the master currency of the accounts shown (so, of the filtered ones) */
@@ -92,7 +103,7 @@ function homeTotal(rows){
   const total = rows.reduce((t, a) => t + a.balance_main, 0);
   return `<tr class="total"><td class="s">Total</td><td class="n ${cls(total)}">${num(total)}</td><td></td><td></td><td></td></tr>`;
 }
-const homeRow = a => `<tr class="click${a.status === 'Closed' ? ' closed' : ''}" onclick="location.hash='#/account/${enc(a.id)}'"><td class="${lateness(a)}" title="${esc(availabilityText(a))}">${esc(a.id)}</td><td class="n ${a.status === 'Closed' ? '' : cls(a.balance_main)}">${num(a.balance_main)}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td></tr>`;
+const homeRow = a => `<tr class="click${a.status === 'Closed' ? ' closed' : ''}" onclick="location.hash='#/account/${enc(a.id)}'"><td class="${lateness(a)}" title="${esc(availabilityText(a))}">${esc(a.id)}${staleBubble(a)}</td><td class="n ${a.status === 'Closed' ? '' : cls(a.balance_main)}">${num(a.balance_main)}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td></tr>`;
 
 /* ------------------------------------------------------------------ spending */
 let SP = {group: 'month', months: 36, exclude: null};
@@ -180,7 +191,7 @@ function calcLateness(r, today = new Date()){
   return last < before(d => d.setDate(d.getDate() - 15)) ? 'late-1' : '';
 }
 const calcTitle = r => calcLateness(r) ? 'Calculé le: ' + r.calc_date.slice(0, 10) : '';
-const interestRow = r => `<tr class="click" onclick="location.hash='#/account/${enc(r.account)}'"><td class="${calcLateness(r)}" title="${esc(calcTitle(r))}">${esc(r.account)}</td><td>${esc(r.type)}</td>${rateCells(r)}</tr>`;
+const interestRow = r => `<tr class="click" onclick="location.hash='#/account/${enc(r.account)}'"><td class="${calcLateness(r)}" title="${esc(calcTitle(r))}">${esc(r.account)}${staleBubble(r)}</td><td>${esc(r.type)}</td>${rateCells(r)}</tr>`;
 const rateCells = r => Object.entries(NATIVE_KEY).map(([y, n]) => `<td class="n">${rateHtml(r[y], r[n], r.currency)}</td>`).join('');
 const INTEREST_COLUMNS = [
   {label: 'Compte', value: r => r.account}, {label: 'Type', value: r => r.type},
