@@ -233,7 +233,7 @@ async function account(id, msg = '', focus = null){
     ? `<label class="inline">Importer <select id="imp_bank">${bankOptions}</select><input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : '';
   $('#main').innerHTML = `<h2><span class="d">${esc(a.id)}</span> <span class="mut d" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
   <div class="row">${focus ? '<button onclick="location.hash=\'#/search\'">← Retour à la recherche</button>' : '<button onclick="location.hash=\'#/\'">← Retour</button>'}
-  <button onclick="setStatus('${jsq(a.id)}','${a.status === 'Open' ? 'Closed' : 'Open'}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
+  <button onclick="${a.status === 'Open' ? 'askCloseAccount' : 'reopenAccount'}('${jsq(a.id)}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
   <a href="/api/account/${enc(a.id)}/export.csv"><button>Exporter CSV</button></a>
   ${importer}</div>
   <div id="imp"></div><div class="ok">${esc(msg)}</div>
@@ -268,9 +268,25 @@ async function saveTx(id){
 }
 async function delTx(tid, id){ if (confirm('Supprimer cette écriture ?')) { await api('transaction/' + tid, 'DELETE'); await account(id, 'Écriture supprimée'); } }
 async function setStatus(id, status){ await api('account/' + enc(id), 'PUT', {status}); await account(id); }
+const reopenAccount = id => setStatus(id, 'Open');
+/* Closing an account hides it from the overview: the name of the account has to be typed to confirm */
+function askCloseAccount(id){
+  $('#guard').innerHTML = `<div class="modal-back"><form class="modal card" role="dialog" aria-modal="true" aria-labelledby="g_title" onsubmit="closeAccount('${jsq(id)}'); return false">
+  <b id="g_title">Clôturer le compte</b><p>Pour confirmer la clôture, saisissez le nom du compte : <b class="d">${esc(id)}</b></p>
+  <input id="g_name" autocomplete="off" aria-label="Nom du compte" oninput="guardCheck('${jsq(id)}')" onkeydown="if (event.key === 'Escape') guardClose()">
+  <div class="row"><button class="primary" id="g_ok" type="submit" disabled>Clôturer le compte</button><button type="button" onclick="guardClose()">Annuler</button></div></form></div>`;
+  $('#g_name').focus?.();
+}
+const guardCheck = id => { $('#g_ok').disabled = $('#g_name').value !== id; };
+const guardClose = () => { $('#guard').innerHTML = ''; };
+async function closeAccount(id){
+  if ($('#g_name').value !== id) return;   // never closed without the exact name, whatever the state of the button
+  guardClose();
+  await setStatus(id, 'Closed');
+}
 async function recalcOne(id){ await api('interests/recalc', 'POST', {account: id}); await account(id, 'Rendements recalculés'); }
 async function addDep(id){ try { await api('account/' + enc(id) + '/deposits', 'POST', {date: $('#d_date').value, amount: $('#d_amt').value}); await account(id, 'Versement ajouté'); } catch (e) { alert(e.message); } }
-async function delDep(did, id){ await api('deposit/' + did, 'DELETE'); await account(id); }
+async function delDep(did, id){ if (confirm('Supprimer ce versement ?')) { await api('deposit/' + did, 'DELETE'); await account(id); } }
 
 /* ------------------------------------------------------------------ search */
 const SEARCH_CRITERIA = ['text', 'account', 'category', 'subcategory', 'date_from', 'date_to', 'amount_min', 'amount_max'];

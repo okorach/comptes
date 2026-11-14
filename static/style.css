@@ -20,6 +20,8 @@ tr.total td{font-size:16px;font-weight:700;border-bottom:0;border-top:2px solid 
 tr.hl td{background:rgba(255,190,0,.28)}
 /* title of a block followed by its controls */
 .title-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px}
+.modal-back{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.45)}
+.modal{width:100%;max-width:440px;margin:0;background:var(--bg);box-shadow:0 8px 30px rgba(0,0,0,.35)} .modal input{width:100%}
 tr.closed{background:rgba(127,127,127,.14)}  /* closed accounts, shown when « comptes ouverts seulement » is unticked */
 tr.click{cursor:pointer} tr.click:hover{background:rgba(127,127,127,.1)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0}

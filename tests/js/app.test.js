@@ -664,3 +664,67 @@ test('account page layout: transactions, yields and deposits are the areas of a 
   assert.match(css, /\.account-grid\{[^}]*grid-template-areas:"tx yields" "tx deposits"/);                                   // wide
   assert.match(css, /@media\(max-width:840px\)\{\.account-grid:not\(\.solo\)\{[^}]*grid-template-areas:"yields" "tx" "deposits"/);   // stacked
 });
+
+/* ---------------------------------------------------------------- guards of the destructive operations */
+const guardedPage = (calls = []) => load(async (url, init) => {
+  calls.push({url, method: init?.method || 'GET'});
+  return {json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR'}
+    : {account: {id: 'Livret A', type: 'Livret A', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []})};
+});
+const writes = calls => calls.filter(c => c.method !== 'GET').map(c => c.method + ' ' + c.url);
+
+test('closing an account asks for its name; nothing is closed until it is typed exactly', async () => {
+  const calls = [];
+  const {ctx, els, mk, get} = guardedPage(calls), guardCheck = get('guardCheck');
+  await ctx.account('Livret A');
+  assert.match(els['#main'].innerHTML, /onclick="askCloseAccount\('Livret A'\)">Clôturer le compte/);
+  ctx.askCloseAccount('Livret A');
+  const dialog = els['#guard'].innerHTML;
+  assert.match(dialog, /role="dialog"[\s\S]*saisissez le nom du compte : <b class="d">Livret A<\/b>/);
+  assert.match(dialog, /id="g_ok" type="submit" disabled/);                 // the button waits for the name
+  mk('#g_ok').disabled = true;
+  for (const typed of ['', 'livret a', 'Livret', 'Livret A ']) {
+    mk('#g_name').value = typed;
+    guardCheck('Livret A');
+    assert.equal(mk('#g_ok').disabled, true, `"${typed}"`);
+    await ctx.closeAccount('Livret A');                                       // even a forced submit does nothing
+    assert.deepEqual(writes(calls), []);
+  }
+  mk('#g_name').value = 'Livret A';
+  guardCheck('Livret A');
+  assert.equal(mk('#g_ok').disabled, false);
+  await ctx.closeAccount('Livret A');
+  assert.deepEqual(writes(calls), ['PUT /api/account/Livret%20A']);
+  assert.equal(els['#guard'].innerHTML, '');                                  // the window is closed
+});
+
+test('cancelling the closing window closes nothing; reopening an account needs no confirmation', async () => {
+  const calls = [];
+  const {ctx, els, get} = guardedPage(calls);
+  await ctx.account('Livret A');
+  ctx.askCloseAccount('Livret A');
+  get('guardClose')();
+  assert.equal(els['#guard'].innerHTML, '');
+  assert.deepEqual(writes(calls), []);
+  await get('reopenAccount')('Livret A');
+  assert.deepEqual(writes(calls), ['PUT /api/account/Livret%20A']);
+});
+
+test('the name of the account is escaped in the closing window', () => {
+  const {ctx, els} = guardedPage();
+  ctx.askCloseAccount('<img src=x onerror=alert(1)>');
+  assert.doesNotMatch(els['#guard'].innerHTML, /<img/);
+});
+
+test('deleting a transaction or a deposit asks for a confirmation, and does nothing when it is refused', async () => {
+  for (const [fn, expected] of [['delTx', 'DELETE /api/transaction/7'], ['delDep', 'DELETE /api/deposit/7']]) {
+    for (const answer of [false, true]) {
+      const calls = [], asked = [];
+      const {ctx} = guardedPage(calls);
+      ctx.confirm = message => { asked.push(message); return answer; };
+      await ctx[fn](7, 'Livret A');
+      assert.equal(asked.length, 1, fn);
+      assert.deepEqual(writes(calls), answer ? [expected] : [], `${fn} ${answer}`);
+    }
+  }
+});
