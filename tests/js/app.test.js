@@ -537,3 +537,11 @@ test('the accounts table ends with the total of the balance in the master curren
   ctx.tableFilter(id, bank, '');
   assert.match(plain(els[`#tf-${id}`].innerHTML), /300,50 €/);
 });
+
+test('the blocks by bank, year and type are below the accounts table', async () => {
+  const {ctx, els} = masterPage('EUR');
+  await ctx.home();
+  const html = els['#main'].innerHTML, at = text => html.indexOf(text);
+  assert.ok(at('<h3>Comptes</h3>') > 0 && at('<h3>Comptes</h3>') < at('Par banque') && at('Par banque') < at('Par année de disponibilité') && at('Par année de disponibilité') < at('Par type'));
+  assert.ok(at('</table>') < at('Par banque') || at('</tfoot>') < at('Par banque'));
+});
