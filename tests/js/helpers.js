@@ -7,7 +7,7 @@ const plain = s => String(s).replace(/[  ]/g, ' ');
 
 function makeElement() {
   return {
-    innerHTML: '', value: '', checked: true, textContent: '', className: '', classList: {toggle() {}}, dataset: {}, files: [],
+    innerHTML: '', value: '', checked: false, textContent: '', className: '', classList: {toggle() {}}, dataset: {}, files: [],
     children: [], replaceChildren(...c) { this.children = c; },
   };
 }

@@ -56,7 +56,7 @@ function paneToggle(id, open){ if (open) OPEN_PANES.add(id); else OPEN_PANES.del
 
 /* ------------------------------------------------------------------ home */
 async function home(){
-  const open = $('#openOnly') ? $('#openOnly').checked : true;
+  const open = !$('#showClosed')?.checked;  // closed accounts are hidden unless « Montrer les comptes fermés » is ticked
   const [acc, nw] = await Promise.all([api('accounts'), api('networth?open=' + (open ? 1 : 0)), meta()]);
   const shown = acc.filter(a => !open || a.status === 'Open');
   const total = shown.reduce((s, a) => s + a.balance_main, 0);
@@ -67,7 +67,7 @@ async function home(){
   ${drawChart(nw.map(p => p.month), [
     {name: `Épargne mensuelle (moy. ${SAVINGS_MONTHS} mois)`, color: 'var(--pos-light)', type: 'bar', axis: 'right', unit: sym(MASTER) + '/mois', values: monthlySavings(nw.map(p => p.total))},
     {name: 'Patrimoine', color: 'var(--acc)', type: 'line', values: nw.map(p => p.total)}], {xticks: 12, unit: sym(MASTER)})}
-  <div class="title-row"><h3>Comptes</h3><label><input type="checkbox" id="openOnly" ${open ? 'checked' : ''} onchange="home()"> comptes ouverts seulement</label></div>${dataTable(homeColumns(), shown.sort((a, b) => b.balance_main - a.balance_main), homeRow, {noun: 'comptes', footer: homeTotal})}
+  <div class="title-row"><h3>Comptes</h3><label><input type="checkbox" id="showClosed" ${open ? '' : 'checked'} onchange="home()"> Montrer les comptes fermés</label></div>${dataTable(homeColumns(), shown.sort((a, b) => b.balance_main - a.balance_main), homeRow, {noun: 'comptes', footer: homeTotal})}
   <div class="row" style="align-items:start">${paneStart('bank', 'Par banque')}${tbl(sumBy(a => a.bank))}</details>
   ${paneStart('year', 'Par année de disponibilité')}${tbl(Object.entries(byYear).sort((a, b) => a[0] - b[0]).map(([k, v]) => [k === '0' ? 'Immédiate' : k, v]))}</details>
   ${paneStart('type', 'Par type')}${tbl(sumBy(a => a.type))}</details></div>`;

@@ -559,7 +559,7 @@ test('an amount that rounds to zero is shown as 0, never -0, and is not negative
 test('closed accounts have a grey row, and a balance that is never red nor -0', async () => {
   const acc = (id, status, balance_main) => ({id, status, type: 'Courant', bank: 'B', availability: 0, last_date: todayIso(), currency: 'EUR', balance_main, balance_native: balance_main});
   const {ctx, els, mk} = masterPage('EUR', {accounts: [acc('Ouvert', 'Open', -5), acc('Ferme0', 'Closed', -1e-10), acc('FermeNeg', 'Closed', -3)]});
-  mk('#openOnly').checked = false;   // « comptes ouverts seulement » unticked
+  mk('#showClosed').checked = true;   // « Montrer les comptes fermés » ticked
   await ctx.home();
   const rows = plain(els['#main'].innerHTML).match(/<tr class="click[^"]*".*?<\/tr>/gs);
   const row = id => rows.find(r => r.includes(`>${id}</td>`));
@@ -571,11 +571,27 @@ test('closed accounts have a grey row, and a balance that is never red nor -0', 
   assert.doesNotMatch(row('FermeNeg'), /neg/);   // never red on a closed account
 });
 
-test('the « comptes ouverts seulement » checkbox is next to the title of the accounts table, not at the top of the page', async () => {
+test('the « Montrer les comptes fermés » checkbox is next to the title of the accounts table, not at the top of the page', async () => {
   const {ctx, els} = masterPage('EUR');
   await ctx.home();
   const html = els['#main'].innerHTML;
-  assert.match(html, /<div class="title-row"><h3>Comptes<\/h3><label><input type="checkbox" id="openOnly" checked onchange="home\(\)"> comptes ouverts seulement<\/label><\/div>/);
-  assert.equal((html.match(/id="openOnly"/g) || []).length, 1);
-  assert.ok(html.indexOf('id="openOnly"') > html.indexOf('chart-'));   // below the chart
+  assert.match(html, /<div class="title-row"><h3>Comptes<\/h3><label><input type="checkbox" id="showClosed"  onchange="home\(\)"> Montrer les comptes fermés<\/label><\/div>/);
+  assert.equal((html.match(/id="showClosed"/g) || []).length, 1);
+  assert.ok(html.indexOf('id="showClosed"') > html.indexOf('chart-'));   // below the chart
+});
+
+test('closed accounts are hidden by default, shown when « Montrer les comptes fermés » is ticked, and the checkbox keeps its state', async () => {
+  const acc = (id, status) => ({id, status, type: 'Courant', bank: 'B', availability: 0, last_date: todayIso(), currency: 'EUR', balance_main: 1, balance_native: 1});
+  const {ctx, els, mk} = masterPage('EUR', {accounts: [acc('Ouvert', 'Open'), acc('Ferme', 'Closed')]});
+  await ctx.home();
+  assert.doesNotMatch(els['#main'].innerHTML, />Ferme<\/td>/);
+  assert.match(els['#main'].innerHTML, />Ouvert<\/td>/);
+  assert.doesNotMatch(els['#main'].innerHTML, /id="showClosed" checked/);
+  mk('#showClosed').checked = true;
+  await ctx.home();
+  assert.match(els['#main'].innerHTML, />Ferme<\/td>/);
+  assert.match(els['#main'].innerHTML, /id="showClosed" checked/);
+  mk('#showClosed').checked = false;
+  await ctx.home();
+  assert.doesNotMatch(els['#main'].innerHTML, />Ferme<\/td>/);
 });
