@@ -81,7 +81,7 @@ test('the page applies the format sent by the server, and the spending matrix an
     : url.includes('meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR', number_format: {decimal: '.', thousands: "'"}} : [])}));
   await new Promise(r => setTimeout(r, 10));
   await ctx.spending();
-  assert.match(els['#main'].innerHTML, /<td class="n">1'234'567\.40<\/td>/);
+  assert.match(els['#main'].innerHTML, /<td class="n">1'234'567 €<\/td>/);
   mk('#x_cur').value = 'CHF';
   await ctx.fxList();
   assert.match(els['#fxl'].innerHTML, /<td class="n">0\.934567<\/td>/);
@@ -124,4 +124,14 @@ test('a refusal of the server is shown in the format card', async () => {
   mk('#nf_th').value = '.';
   await ctx.setNumberFormatting();
   assert.match(els['#nf_err'].textContent, /doivent être différents/);
+});
+
+test('num can show the amounts rounded to the unit (no cents), still with the currency and the separators', () => {
+  const {get} = load(), set = get('setNumberFormat'), num = get('num');
+  set({decimal: ',', thousands: ' '});
+  assert.equal(plain(num(1234567.891, '€', 0)), '1 234 568 €');
+  assert.equal(plain(num(-2782.6, 'CHF', 0)), '-2 783 CHF');
+  assert.equal(plain(num(-0.3, '€', 0)), '0 €');          // never -0
+  assert.equal(num(null, '€', 0), '');
+  assert.equal(plain(num(1234.5)), '1 234,50 €');         // two decimals by default
 });

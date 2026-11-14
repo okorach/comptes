@@ -924,14 +924,14 @@ test('the overview has no bubble for the yields', async () => {
 });
 
 /* ---------------------------------------------------------------- pages built from rows (refactored templates) */
-test('the spending page shows the category x period matrix, escaped, with the amounts to the cent and the missing ones empty', async () => {
+test('the spending page shows the category x period matrix, escaped, with the amounts rounded to the unit, in the currency, and the missing ones empty', async () => {
   const report = {categories: [{category: 'A<b>', total: 10, pct: 1}], series: [{period: '2024-01', spread: 1, raw: 1, avg12: 1}, {period: '2024-02', spread: 2, raw: 2, avg12: 2}],
     matrix: {'A<b>': {'2024-01': 1234.56, '2024-02': null}}, excluded: [], all_categories: ['A<b>']};
   const {ctx, els} = load(async url => ({json: async () => (url.includes('spending') ? report : url.includes('meta') ? {categories: [], master_currency: 'EUR'} : [])}));
   await settle();
   await ctx.spending();
   const html = plain(els['#main'].innerHTML);
-  assert.match(html, /<tr><td>A&lt;b&gt;<\/td><td class="n">1 234,56<\/td><td class="n"><\/td><\/tr>/);
+  assert.match(html, /<tr><td>A&lt;b&gt;<\/td><td class="n">1 235 €<\/td><td class="n"><\/td><\/tr>/);
   assert.doesNotMatch(html, /A<b>/);
 });
 

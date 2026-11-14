@@ -12,7 +12,7 @@ const esc = s => {
 let MASTER = 'EUR';  // master currency of the application: totals, balances and yields of all the accounts are in it
 /* An amount that rounds to 0 is shown as 0, never as -0 (and not as negative: see cls) */
 const cents = v => Math.round(v * 100) / 100 === 0 ? 0 : v;
-const num = (v, cur = sym(MASTER)) => v == null ? '' : formatNumber(cents(v), 2) + ' ' + esc(cur);
+const num = (v, cur = sym(MASTER), digits = 2) => v == null ? '' : formatNumber(digits === 2 ? cents(v) : (Math.round(v) || 0), digits) + ' ' + esc(cur);   // digits: 2 (cents) or 0 (rounded)
 const pct = v => v == null ? '–' : formatNumber(v * 100, 1) + ' %';
 const cls = v => cents(v) < 0 ? 'neg' : '';
 const sym = c => ({EUR: '€', CHF: 'CHF', USD: '$', GBP: '£'}[c] || c);
@@ -126,7 +126,7 @@ async function spending(){
   const chips = r.all_categories.concat(r.all_categories.includes('(sans catégorie)') ? [] : ['(sans catégorie)']).map(c =>
     `<label><input type="checkbox" ${r.excluded.includes(c) ? '' : 'checked'} onchange="toggleCat('${jsq(c)}',this.checked)"> <span class="d">${esc(c)}</span></label>`).join('');
   const avgCell = x => SP.group === 'month' ? `<td class="n">${num(x.avg12)}</td>` : '';  // 12-month average: monthly view only
-  const matrixCell = v => '<td class="n">' + (v == null ? '' : formatNumber(cents(v), 2)) + '</td>';
+  const matrixCell = v => '<td class="n">' + num(v, sym(MASTER), 0) + '</td>';
   const matrixRow = c => '<tr><td>' + esc(c) + '</td>' + periods.map(p => matrixCell(r.matrix[c][p])).join('') + '</tr>';
   const cats = Object.keys(r.matrix).sort((a, b) => (r.categories.findIndex(x => x.category === a)) - (r.categories.findIndex(x => x.category === b)));
   $('#main').innerHTML = `<h2>Dépenses</h2>
