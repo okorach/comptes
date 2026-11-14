@@ -473,3 +473,16 @@ test('the blocks by category and by period of the spending page are collapsible,
   assert.match(html, /<details class="pane"[^>]*><summary><h3>Par période<\/h3><\/summary><div class="scroll"[\s\S]*<\/table><\/div><\/details>/);
   assert.doesNotMatch(html, /<details[^>]* open/);
 });
+
+test('the availability is no longer a column: it shows when hovering on the name of the account', async () => {
+  const {ctx, els} = masterPage('EUR', {accounts: [
+    {id: 'PER', status: 'Open', type: 'Livret', bank: 'B', availability: 2035, last_date: '2024-01-01', currency: 'EUR', balance_main: 10, balance_native: 10},
+    {id: 'Courant', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: '2024-01-01', currency: 'EUR', balance_main: 5, balance_native: 5}]});
+  await ctx.home();
+  const html = els['#main'].innerHTML;
+  assert.doesNotMatch(html, /Dispo\./);
+  assert.match(html, /<td title="Disponible en 2035">PER<\/td>/);
+  assert.match(html, /<td title="Disponible immédiatement">Courant<\/td>/);
+  const row = html.match(/<tr class="click"[^>]*><td title="Disponible en 2035">.*?<\/tr>/s)[0];
+  assert.equal((row.match(/<td/g) || []).length, 6);   // name, type, bank, last date, native balance, balance
+});
