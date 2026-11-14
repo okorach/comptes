@@ -77,7 +77,7 @@ const homeColumns = () => [
   {label: 'Solde (devise)', num: true, value: a => a.currency === MASTER ? null : a.balance_native}, {label: 'Solde ' + sym(MASTER), num: true, value: a => a.balance_main},
 ];
 /* Shown when hovering on the name of the account (replaces the old column) */
-const availabilityText = a => a.availability ? 'Disponible en ' + a.availability : 'Disponible immédiatement';
+const availabilityText = a => 'Disponibilité: ' + (a.availability || 'Immédiate');
 const homeRow = a => `<tr class="click" onclick="location.hash='#/account/${enc(a.id)}'"><td title="${esc(availabilityText(a))}">${esc(a.id)}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td><td>${a.last_date || ''}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td class="n ${cls(a.balance_main)}">${num(a.balance_main)}</td></tr>`;
 
 /* ------------------------------------------------------------------ spending */

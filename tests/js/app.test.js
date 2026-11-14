@@ -481,8 +481,8 @@ test('the availability is no longer a column: it shows when hovering on the name
   await ctx.home();
   const html = els['#main'].innerHTML;
   assert.doesNotMatch(html, /Dispo\./);
-  assert.match(html, /<td title="Disponible en 2035">PER<\/td>/);
-  assert.match(html, /<td title="Disponible immédiatement">Courant<\/td>/);
-  const row = html.match(/<tr class="click"[^>]*><td title="Disponible en 2035">.*?<\/tr>/s)[0];
+  assert.match(html, /<td title="Disponibilité: 2035">PER<\/td>/);
+  assert.match(html, /<td title="Disponibilité: Immédiate">Courant<\/td>/);
+  const row = html.match(/<tr class="click"[^>]*><td title="Disponibilité: 2035">.*?<\/tr>/s)[0];
   assert.equal((row.match(/<td/g) || []).length, 6);   // name, type, bank, last date, native balance, balance
 });
