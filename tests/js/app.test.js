@@ -514,3 +514,12 @@ test('a late account name is coloured and its tooltip adds the last update', asy
   assert.match(html, new RegExp(`<td class="late-1" title="Disponibilité: Immédiate\nDernière mise à jour: ${mid}">Orange</td>`));
   assert.match(html, /<td class="" title="Disponibilité: Immédiate">Frais<\/td>/);
 });
+
+test('the accounts table is filterable by type and bank only, and sortable on every column', async () => {
+  const {ctx, els} = masterPage('EUR');
+  await ctx.home();
+  const html = els['#main'].innerHTML;
+  const filters = html.match(/<tr class="filters">(.*?)<\/tr>/s)[1];
+  assert.deepEqual([...filters.matchAll(/aria-label="Filtrer ([^"]+)"/g)].map(m => m[1]), ['Type', 'Banque']);
+  assert.equal((html.match(/class="sort"/g) || []).length, 5);
+});

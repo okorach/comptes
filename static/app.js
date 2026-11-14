@@ -72,8 +72,8 @@ async function home(){
   <h3>Comptes</h3>${dataTable(homeColumns(), shown.sort((a, b) => b.balance_main - a.balance_main), homeRow, {noun: 'comptes'})}`;
 }
 const homeColumns = () => [
-  {label: 'Compte', value: a => a.id}, {label: 'Solde ' + sym(MASTER), num: true, value: a => a.balance_main},
-  {label: 'Solde (devise)', num: true, value: a => a.currency === MASTER ? null : a.balance_native}, {label: 'Type', value: a => a.type}, {label: 'Banque', value: a => a.bank},
+  {label: 'Compte', filter: false, value: a => a.id}, {label: 'Solde ' + sym(MASTER), num: true, filter: false, value: a => a.balance_main},
+  {label: 'Solde (devise)', num: true, filter: false, value: a => a.currency === MASTER ? null : a.balance_native}, {label: 'Type', value: a => a.type}, {label: 'Banque', value: a => a.bank},
 ];
 /* Open account whose last transaction is more than 3 months old ('late-3', red) or more than 1 month old ('late-1', orange) */
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
