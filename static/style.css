@@ -53,7 +53,8 @@ svg text{fill:currentColor}
 
 /* ---- responsive layout: the panes of a page sit side by side when there is room, one under the other otherwise */
 details.pane>summary{cursor:pointer;list-style-position:inside;margin:20px 0 6px} details.pane>summary h3{display:inline;margin:0}
-.pane{flex:1;min-width:min(260px,100%)} .pane-wide{flex:3;min-width:min(520px,100%)}
+.pane{flex:1;min-width:min(260px,100%)}
+@media(max-width:840px){.pane-side{order:-1}}  /* panes stacked: the yields (and deposits) of an account come before its long list of transactions */ .pane-wide{flex:3;min-width:min(520px,100%)}
 .chart-scroll{overflow-x:auto} .chart-body{min-width:720px}  /* a chart keeps a readable size: it scrolls sideways on a narrow screen */
 input,select{max-width:100%}
 .row label.inline{flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px}

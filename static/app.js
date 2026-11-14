@@ -189,7 +189,7 @@ function depositRow(d, aid){
   return `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_main)}</td><td class="s actions">${iconButton('trash', 'Supprimer', del)}</td></tr>`;
 }
 function depositsPanel(info, a, cur){
-  return `<div class="pane"><h3>Rendements nets</h3>${interestsTable(info.interests, a.currency)}
+  return `<div class="pane pane-side"><h3>Rendements nets</h3>${interestsTable(info.interests, a.currency)}
   <button onclick="recalcOne('${jsq(a.id)}')">Recalculer</button>
   <h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
   <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;

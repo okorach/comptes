@@ -650,3 +650,14 @@ test('the deposits have a trash icon instead of suppr.', async () => {
   assert.doesNotMatch(row, /suppr\./);
   assert.match(row, /<button class="icon" title="Supprimer" aria-label="Supprimer" onclick="delDep\(5,'Livret'\)"><svg/);
 });
+
+test('on a narrow screen the yields of an account come before its transactions', async () => {
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR'}
+    : {account: {id: 'Livret', type: 'Livret A', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: {y1: 0.02}, deposits: []})}));
+  await ctx.account('Livret');
+  const html = els['#main'].innerHTML;
+  assert.match(html, /<div class="pane pane-side"><h3>Rendements nets/);
+  assert.ok(html.indexOf('pane pane-wide') < html.indexOf('pane-side'));   // side by side on a wide screen: transactions first
+  const css = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'static', 'style.css'), 'utf8');
+  assert.match(css, /@media\(max-width:840px\)\{\.pane-side\{order:-1\}\}/);
+});
