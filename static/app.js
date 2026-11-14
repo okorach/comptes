@@ -73,10 +73,20 @@ async function home(){
 }
 const homeColumns = () => [
   {label: 'Compte', value: a => a.id}, {label: 'Type', value: a => a.type}, {label: 'Banque', value: a => a.bank},
-  {label: 'Dispo.', value: a => a.availability || null}, {label: 'Dernière date', value: a => a.last_date},
   {label: 'Solde (devise)', num: true, value: a => a.currency === MASTER ? null : a.balance_native}, {label: 'Solde ' + sym(MASTER), num: true, value: a => a.balance_main},
 ];
-const homeRow = a => `<tr class="click" onclick="location.hash='#/account/${enc(a.id)}'"><td>${esc(a.id)}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td><td>${a.availability || ''}</td><td>${a.last_date || ''}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td class="n ${cls(a.balance_main)}">${num(a.balance_main)}</td></tr>`;
+/* Open account whose last transaction is more than 3 months old ('late-3', red) or more than 1 month old ('late-1', orange) */
+const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function lateness(a, today = new Date()){
+  if (a.status !== 'Open' || !a.last_date) return '';
+  const before = months => { const d = new Date(today); d.setMonth(d.getMonth() - months); return isoDay(d); };
+  const last = a.last_date.slice(0, 10);
+  if (last < before(3)) return 'late-3';
+  return last < before(1) ? 'late-1' : '';
+}
+/* Shown when hovering on the name of the account (replaces the old columns): availability, and last update when it is late */
+const availabilityText = a => 'Disponibilité: ' + (a.availability || 'Immédiate') + (lateness(a) ? '\nDernière mise à jour: ' + a.last_date.slice(0, 10) : '');
+const homeRow = a => `<tr class="click" onclick="location.hash='#/account/${enc(a.id)}'"><td class="${lateness(a)}" title="${esc(availabilityText(a))}">${esc(a.id)}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td class="n ${cls(a.balance_main)}">${num(a.balance_main)}</td></tr>`;
 
 /* ------------------------------------------------------------------ spending */
 let SP = {group: 'month', months: 36, exclude: null};
