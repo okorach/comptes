@@ -440,7 +440,7 @@ test('route sends #/search to the search page and #/account/<id>/tx/<n> to the a
 test('the panes of the pages stack on a narrow screen: classes instead of fixed widths', async () => {
   const {ctx, els} = fxPage([TX]);
   await ctx.account('Suisse');
-  assert.match(els['#main'].innerHTML, /<div class="pane pane-wide">/);
+  assert.match(els['#main'].innerHTML, /<div class="account-grid solo"><div class="g-tx">/);
   assert.doesNotMatch(els['#main'].innerHTML, /min-width:\d+px/);
   const home = masterPage('EUR');
   await home.ctx.home();
@@ -651,24 +651,16 @@ test('the deposits have a trash icon instead of suppr.', async () => {
   assert.match(row, /<button class="icon" title="Supprimer" aria-label="Supprimer" onclick="delDep\(5,'Livret'\)"><svg/);
 });
 
-test('on a narrow screen the yields of an account come before its transactions', async () => {
-  const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR'}
-    : {account: {id: 'Livret', type: 'Livret A', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: {y1: 0.02}, deposits: []})}));
-  await ctx.account('Livret');
-  const html = els['#main'].innerHTML;
-  assert.match(html, /<div class="pane pane-side"><h3>Rendements nets/);
-  assert.ok(html.indexOf('pane pane-wide') < html.indexOf('pane-side'));   // side by side on a wide screen: transactions first
-  const css = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'static', 'style.css'), 'utf8');
-  assert.match(css, /@media\(max-width:840px\)\{\.pane-side\{order:-1\}\}/);
-});
-
-test('the deposits are at the bottom of the page, after the transactions, whatever the width; the yields stay next to the transactions', async () => {
+test('account page layout: transactions, yields and deposits are the areas of a grid that is wide (side by side) or stacked (yields, transactions, deposits)', async () => {
   const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [TX] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR'}
     : {account: {id: 'Livret', type: 'Livret A', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: {y1: 0.02}, deposits: [{id: 5, date: '2024-01-01', amount_main: 100}]})}));
   await ctx.account('Livret');
   const html = els['#main'].innerHTML, at = t => html.indexOf(t);
-  assert.ok(at('pane pane-wide') < at('Rendements nets') && at('Rendements nets') < at('<h3>Versements</h3>'));
-  assert.ok(at('</table>', at('pane pane-wide')) < at('<h3>Versements</h3>'));
-  assert.doesNotMatch(html.slice(at('<h3>Rendements nets'), at('<h3>Versements</h3>')), /Versements|d_amt/);   // the yields pane holds no deposit
-  assert.match(html.slice(at('<h3>Versements</h3>')), /d_amt[\s\S]*delDep\(5,'Livret'\)/);
+  assert.match(html, /<div class="account-grid "><div class="g-tx">/);
+  assert.ok(at('g-tx') < at('g-yields') && at('g-yields') < at('g-deposits'));
+  assert.doesNotMatch(html.slice(at('g-yields'), at('g-deposits')), /Versements|d_amt/);   // the yields hold no deposit
+  assert.match(html.slice(at('g-deposits')), /<h3>Versements<\/h3>[\s\S]*d_amt[\s\S]*delDep\(5,'Livret'\)/);
+  const css = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'static', 'style.css'), 'utf8').replace(/\r/g, '');
+  assert.match(css, /\.account-grid\{[^}]*grid-template-areas:"tx yields" "tx deposits"/);                                   // wide
+  assert.match(css, /@media\(max-width:840px\)\{\.account-grid:not\(\.solo\)\{[^}]*grid-template-areas:"yields" "tx" "deposits"/);   // stacked
 });

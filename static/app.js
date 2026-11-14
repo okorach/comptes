@@ -188,15 +188,15 @@ function depositRow(d, aid){
   const del = `delDep(${Number(d.id)},'${jsq(aid)}')`;
   return `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_main)}</td><td class="s actions">${iconButton('trash', 'Supprimer', del)}</td></tr>`;
 }
-/* Yields: next to the transactions (before them when the panes are stacked) */
+/* Layout of an account page (CSS grid): wide screen = transactions on the left, yields then deposits on the right;
+   stacked = yields, transactions, then deposits at the bottom of the page */
 function yieldsPanel(info, a){
-  return `<div class="pane pane-side"><h3>Rendements nets</h3>${interestsTable(info.interests, a.currency)}
+  return `<div class="g-yields"><h3>Rendements nets</h3>${interestsTable(info.interests, a.currency)}
   <button onclick="recalcOne('${jsq(a.id)}')">Recalculer</button></div>`;
 }
-/* Deposits: always at the bottom of the page, after the transactions */
 function depositsPanel(info, a, cur){
-  return `<h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
-  <div class="scroll" style="max-height:340px;max-width:460px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div>`;
+  return `<div class="g-deposits"><h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
+  <div class="scroll" style="max-height:340px;max-width:460px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;
 }
 const txColumns = (foreign, cur, hasFx, amounts = true) => [
   {label: 'Date', value: t => t.date}, ...(amounts ? [{label: 'Montant ' + sym(MASTER), num: true, value: t => t.amount_main}] : []), {label: 'Solde ' + sym(MASTER), num: true, value: t => t.balance_main},
@@ -241,9 +241,8 @@ async function account(id, msg = '', focus = null){
   <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
-  <div class="row" style="align-items:start"><div class="pane pane-wide">${dataTable(txColumns(foreign, sym(a.currency), hasFx, showsAmount(a)), tr, t => txRow(t, foreign, a.id, hasFx, showsAmount(a)), {noun: 'écritures (les plus récentes)'})}</div>
-  ${hasDep ? yieldsPanel(info, a) : ''}</div>
-  ${hasDep ? depositsPanel(info, a, cur) : ''}`;
+  <div class="account-grid ${hasDep ? '' : 'solo'}"><div class="g-tx">${dataTable(txColumns(foreign, sym(a.currency), hasFx, showsAmount(a)), tr, t => txRow(t, foreign, a.id, hasFx, showsAmount(a)), {noun: 'écritures (les plus récentes)'})}</div>
+  ${hasDep ? yieldsPanel(info, a) + depositsPanel(info, a, cur) : ''}</div>`;
   EDIT = null;
   $('#tx-' + focus)?.scrollIntoView?.({block: 'center'});
 }

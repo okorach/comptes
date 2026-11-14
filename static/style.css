@@ -54,7 +54,12 @@ svg text{fill:currentColor}
 /* ---- responsive layout: the panes of a page sit side by side when there is room, one under the other otherwise */
 details.pane>summary{cursor:pointer;list-style-position:inside;margin:20px 0 6px} details.pane>summary h3{display:inline;margin:0}
 .pane{flex:1;min-width:min(260px,100%)}
-@media(max-width:840px){.pane-side{order:-1}}  /* panes stacked: the yields (and deposits) of an account come before its long list of transactions */ .pane-wide{flex:3;min-width:min(520px,100%)}
+/* Account page: transactions on the left, yields then deposits on the right; when there is no room for that, the yields come first,
+   then the transactions, and the deposits stay at the bottom of the page */
+.account-grid{display:grid;gap:10px 20px;align-items:start;grid-template-columns:minmax(0,3fr) minmax(260px,1fr);grid-template-rows:auto 1fr;grid-template-areas:"tx yields" "tx deposits"}
+.account-grid.solo{grid-template-columns:minmax(0,1fr);grid-template-rows:auto;grid-template-areas:"tx"}
+.g-tx{grid-area:tx;min-width:0} .g-yields{grid-area:yields} .g-deposits{grid-area:deposits}
+@media(max-width:840px){.account-grid:not(.solo){grid-template-columns:minmax(0,1fr);grid-template-rows:auto;grid-template-areas:"yields" "tx" "deposits"}}
 .chart-scroll{overflow-x:auto} .chart-body{min-width:720px}  /* a chart keeps a readable size: it scrolls sideways on a narrow screen */
 input,select{max-width:100%}
 .row label.inline{flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px}
