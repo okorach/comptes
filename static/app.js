@@ -122,22 +122,33 @@ function homeTotal(rows){
 const homeRow = a => `<tr class="click${a.status === 'Closed' ? ' closed' : ''}" onclick="location.hash='#/account/${enc(a.id)}'"><td title="${esc(availabilityText(a))}">${esc(a.id)}${staleBubble(a)}</td><td class="n ${a.status === 'Closed' ? '' : cls(a.balance_main)}">${num(a.balance_main)}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td></tr>`;
 
 /* ------------------------------------------------------------------ spending */
-let SP = {group: 'month', months: 36, exclude: null};
+let SP = {group: 'month', matrixGroup: 'month', months: 36, exclude: null};
+/* The quarter or the year in progress is incomplete: an orange bullet is shown next to it (the month too) */
+function incompleteBubble(period, group, today = new Date()){
+  const year = today.getFullYear();
+  const current = {year: String(year), quarter: `${year}-T${Math.floor(today.getMonth() / 3) + 1}`, month: `${year}-${String(today.getMonth() + 1).padStart(2, '0')}`}[group];
+  return period === current ? bubble(true, {year: 'Année incomplète', quarter: 'Trimestre incomplet', month: 'Mois incomplet'}[group]) : '';
+}
+const GROUPINGS = [['month', 'Mois'], ['quarter', 'Trimestre'], ['year', 'Année']];
 async function spending(){
   await meta();
   const q = `spending?group=${SP.group}&months=${SP.months}` + (SP.exclude ? `&exclude=${enc(SP.exclude.join(','))}` : '');
   const r = await api(q);
   SP.exclude = r.excluded;
   const s = r.series;
-  const periods = s.map(x => x.period);
+  // the matrix has its own grouping: asked again only when it differs from the one of the page
+  const mq = `spending?group=${SP.matrixGroup}&months=${SP.months}&exclude=${enc(r.excluded.join(',') || '')}`;
+  const mr = SP.matrixGroup === SP.group ? r : await api(mq);
+  const periods = mr.series.map(x => x.period);
   const chips = r.all_categories.concat(r.all_categories.includes('(sans catégorie)') ? [] : ['(sans catégorie)']).map(c =>
     `<label><input type="checkbox" ${r.excluded.includes(c) ? '' : 'checked'} onchange="toggleCat('${jsq(c)}',this.checked)"> <span class="d">${esc(c)}</span></label>`).join('');
   const avgCell = x => SP.group === 'month' ? `<td class="n">${num(x.avg12)}</td>` : '';  // 12-month average: monthly view only
   const matrixCell = v => '<td class="n">' + num(v, sym(MASTER), 0) + '</td>';
-  const matrixRow = c => '<tr><td>' + esc(c) + '</td>' + periods.map(p => matrixCell(r.matrix[c][p])).join('') + '</tr>';
-  const cats = Object.keys(r.matrix).sort((a, b) => (r.categories.findIndex(x => x.category === a)) - (r.categories.findIndex(x => x.category === b)));
+  const cats = Object.keys(mr.matrix).sort((a, b) => (r.categories.findIndex(x => x.category === a)) - (r.categories.findIndex(x => x.category === b)));
+  // one row per period (the latest first), one column per category
+  const matrixRow = p => '<tr><td class="d">' + p + incompleteBubble(p, SP.matrixGroup) + '</td>' + cats.map(c => matrixCell(mr.matrix[c][p])).join('') + '</tr>';
   $('#main').innerHTML = `<h2>Dépenses</h2>
-  <div class="row"><label>Regroupement<select onchange="SP.group=this.value;spending()">${[['month', 'Mois'], ['quarter', 'Trimestre'], ['year', 'Année']].map(([v, l]) => `<option value="${v}" ${SP.group === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+  <div class="row"><label>Regroupement<select onchange="SP.group=this.value;spending()">${GROUPINGS.map(([v, l]) => `<option value="${v}" ${SP.group === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
   <label>Période<select onchange="SP.months=+this.value;spending()">${[[12, '12 mois'], [24, '24 mois'], [36, '3 ans'], [60, '5 ans'], [120, '10 ans'], [600, 'Tout']].map(([v, l]) => `<option value="${v}" ${SP.months === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
   <div class="chips"><span class="mut">Catégories incluses :</span> ${chips}</div>
   <div class="mut" style="font-size:12px;margin:4px 0">Dépenses = −montant sur les comptes « en budget ». Les écritures avec un nombre N (&gt;1) dans « In Budget » sont lissées sur N mois.</div>
@@ -145,9 +156,9 @@ async function spending(){
   <div class="row" style="align-items:start">${paneStart('category', 'Par catégorie')}<table><tr><th>Catégorie</th><th class="n">Total</th><th class="n">%</th></tr>
   ${r.categories.map(c => `<tr><td>${esc(c.category)}</td><td class="n ${cls(-c.total)}">${num(c.total)}</td><td class="n">${pct(c.pct)}</td></tr>`).join('')}</table></details>
   ${paneStart('period', 'Par période')}<div class="scroll" style="max-height:420px;overflow-y:auto"><table><tr><th>Période</th><th class="n">Lissées</th><th class="n">Brutes</th>${SP.group === 'month' ? '<th class="n">Moy. 12 mois</th>' : ''}</tr>
-  ${s.slice().reverse().map(x => `<tr><td>${x.period}</td><td class="n">${num(x.spread)}</td><td class="n">${num(x.raw)}</td>${avgCell(x)}</tr>`).join('')}</table></div></details></div>
-  <h3>Catégorie × période</h3><div class="scroll"><table><tr><th>Catégorie</th>${periods.map(p => `<th class="n d">${p}</th>`).join('')}</tr>
-  ${cats.map(matrixRow).join('')}</table></div>`;
+  ${s.slice().reverse().map(x => `<tr><td>${x.period}${incompleteBubble(x.period, SP.group)}</td><td class="n">${num(x.spread)}</td><td class="n">${num(x.raw)}</td>${avgCell(x)}</tr>`).join('')}</table></div></details></div>
+  <div class="title-row"><h3>Période × catégorie</h3><label>Regroupement<select id="matrixGroup" onchange="SP.matrixGroup=this.value;spending()">${GROUPINGS.map(([v, l]) => `<option value="${v}" ${SP.matrixGroup === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div><div class="scroll"><table><tr><th>Période</th>${cats.map(c => `<th class="n d">${esc(c)}</th>`).join('')}</tr>
+  ${periods.slice().reverse().map(matrixRow).join('')}</table></div>`;
 }
 function toggleCat(c, included){
   const set = new Set(SP.exclude || []); included ? set.delete(c) : set.add(c);
