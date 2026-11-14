@@ -440,7 +440,7 @@ test('route sends #/search to the search page and #/account/<id>/tx/<n> to the a
 test('the panes of the pages stack on a narrow screen: classes instead of fixed widths', async () => {
   const {ctx, els} = fxPage([TX]);
   await ctx.account('Suisse');
-  assert.match(els['#main'].innerHTML, /<div class="pane pane-wide">/);
+  assert.match(els['#main'].innerHTML, /<div class="account-grid solo"><div class="g-tx">/);
   assert.doesNotMatch(els['#main'].innerHTML, /min-width:\d+px/);
   const home = masterPage('EUR');
   await home.ctx.home();
@@ -594,4 +594,73 @@ test('closed accounts are hidden by default, shown when « Montrer les comptes f
   mk('#showClosed').checked = false;
   await ctx.home();
   assert.doesNotMatch(els['#main'].innerHTML, />Ferme<\/td>/);
+});
+
+/* ---------------------------------------------------------------- accounts shown without the amounts */
+const typedPage = (type, currency = 'EUR') => load(async url => ({json: async () => (url.includes('transactions') ? [TX] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR', 'CHF'], master_currency: 'EUR'}
+  : {...FX_ACCOUNT, account: {...FX_ACCOUNT.account, type, currency}})}));
+const heads = html => [...html.match(/<table class="data"><thead><tr>(.*?)<\/tr>/s)[1].matchAll(/<th[^>]*>([^<]*?)(?: <button|<\/th>)/g)].map(m => m[1]).filter(Boolean);
+
+test('the transactions of Assurance Vie, PER, PERCO, PEA, Actions, PEE and Investment accounts have no Montant column', async () => {
+  for (const type of ['Assurance Vie', 'PER', 'PERCO', 'PEA', 'Actions', 'PEE', 'Investment']) {
+    const {ctx, els} = typedPage(type);
+    await ctx.account('X');
+    const html = els['#main'].innerHTML;
+    assert.deepEqual(heads(html), ['Date', 'Solde €', 'Description', 'Sous-cat.'], type);
+    const row = html.match(/<tr id="tx-1">.*?<\/tr>/s)[0];
+    assert.equal((row.match(/<td/g) || []).length, 5, type);   // date, balance, description, sub-category, buttons
+  }
+});
+
+test('the other accounts keep their Montant columns', async () => {
+  for (const type of ['Courant', 'Livret A', 'PEL']) {
+    const {ctx, els} = typedPage(type);
+    await ctx.account('X');
+    assert.deepEqual(heads(els['#main'].innerHTML), ['Date', 'Montant €', 'Solde €', 'Description', 'Sous-cat.'], type);
+  }
+});
+
+test('in a foreign currency, both the Montant columns are hidden and the balances stay', async () => {
+  const {ctx, els} = typedPage('Actions', 'CHF');
+  await ctx.account('X');
+  const html = els['#main'].innerHTML;
+  assert.deepEqual(heads(html), ['Date', 'Solde €', 'Solde CHF', 'Description', 'Sous-cat.']);
+  assert.equal((html.match(/<tr id="tx-1">.*?<\/tr>/s)[0].match(/<td/g) || []).length, 6);
+  const other = typedPage('Courant', 'CHF');
+  await other.ctx.account('X');
+  assert.deepEqual(heads(other.els['#main'].innerHTML), ['Date', 'Montant €', 'Solde €', 'Montant CHF', 'Solde CHF', 'Description', 'Sous-cat.']);
+});
+
+test('the transaction rows have a pen and a trash icon instead of the words modifier and suppr.', async () => {
+  const {ctx, els} = typedPage('Courant');
+  await ctx.account('X');
+  const row = els['#main'].innerHTML.match(/<tr id="tx-1">.*?<\/tr>/s)[0];
+  assert.doesNotMatch(row, />modifier<|>suppr\.</);
+  const buttons = [...row.matchAll(/<button class="icon" title="([^"]+)" aria-label="([^"]+)" onclick="([^"]+)"><svg.*?<\/svg><\/button>/gs)];
+  assert.deepEqual(buttons.map(b => [b[1], b[2]]), [['Modifier', 'Modifier'], ['Supprimer', 'Supprimer']]);
+  assert.match(buttons[0][3], /^editTx\(/);
+  assert.equal(buttons[1][3], "delTx(1,'Suisse')");
+});
+
+test('the deposits have a trash icon instead of suppr.', async () => {
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR'}
+    : {account: {id: 'Livret', type: 'Livret A', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: [{id: 5, date: '2024-01-01', amount_main: 100}]})}));
+  await ctx.account('Livret');
+  const row = els['#main'].innerHTML.match(/<tr><td>2024-01-01<\/td><td class="n">100,00[^<]*<\/td>.*?<\/tr>/s)[0];
+  assert.doesNotMatch(row, /suppr\./);
+  assert.match(row, /<button class="icon" title="Supprimer" aria-label="Supprimer" onclick="delDep\(5,'Livret'\)"><svg/);
+});
+
+test('account page layout: transactions, yields and deposits are the areas of a grid that is wide (side by side) or stacked (yields, transactions, deposits)', async () => {
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [TX] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR'}
+    : {account: {id: 'Livret', type: 'Livret A', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: {y1: 0.02}, deposits: [{id: 5, date: '2024-01-01', amount_main: 100}]})}));
+  await ctx.account('Livret');
+  const html = els['#main'].innerHTML, at = t => html.indexOf(t);
+  assert.match(html, /<div class="account-grid "><div class="g-tx">/);
+  assert.ok(at('g-tx') < at('g-yields') && at('g-yields') < at('g-deposits'));
+  assert.doesNotMatch(html.slice(at('g-yields'), at('g-deposits')), /Versements|d_amt/);   // the yields hold no deposit
+  assert.match(html.slice(at('g-deposits')), /<h3>Versements<\/h3>[\s\S]*d_amt[\s\S]*delDep\(5,'Livret'\)/);
+  const css = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'static', 'style.css'), 'utf8').replace(/\r/g, '');
+  assert.match(css, /\.account-grid\{[^}]*grid-template-areas:"tx yields" "tx deposits"/);                                   // wide
+  assert.match(css, /@media\(max-width:840px\)\{\.account-grid:not\(\.solo\)\{[^}]*grid-template-areas:"yields" "tx" "deposits"/);   // stacked
 });

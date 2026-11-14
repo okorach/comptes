@@ -139,13 +139,25 @@ async function recalc(){
 }
 
 /* ------------------------------------------------------------------ account */
+/* Small line icons (24x24, drawn with the colour of the text) for the buttons of the rows */
+const ICONS = {
+  pen: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  trash: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>',
+};
+const iconButton = (icon, label, onclick) => `<button class="icon" title="${label}" aria-label="${label}" onclick="${onclick}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[icon]}</svg></button>`;
 let FOCUS = null;  // transaction to show (highlighted) in the account page: the one found by the search
-function txRow(t, foreign, aid, hasFx = false){
-  const native = foreign ? `<td class="n mut">${num(t.native_amount, '')}</td><td class="n mut">${num(t.native_balance, '')}</td>` : '';
+/* Accounts whose transactions are shown without the « Montant » columns (the balance is what matters, the amounts are the movements of the market) */
+const NO_AMOUNT_TYPES = new Set(['Assurance Vie', 'PER', 'PERCO', 'PEA', 'Actions', 'PEE', 'Investment']);
+const showsAmount = a => !NO_AMOUNT_TYPES.has(a.type);
+function txRow(t, foreign, aid, hasFx = false, amounts = true){
+  const nativeAmount = foreign && amounts ? `<td class="n mut">${num(t.native_amount, '')}</td>` : '';
+  const native = foreign ? nativeAmount + `<td class="n mut">${num(t.native_balance, '')}</td>` : '';
+  const amount = amounts ? `<td class="n ${cls(t.amount_main)}">${num(t.amount_main)}</td>` : '';
   const origin = hasFx ? `<td class="n mut">${num(t.fx_amount, '')}</td><td>${esc(t.fx_currency)}</td>` : '';
+  const edit = `editTx(${esc(JSON.stringify(t))})`, del = `delTx(${Number(t.id)},'${jsq(aid)}')`;
   const budget = t.in_budget ? ` <span class="mut">(${esc(t.in_budget)})</span>` : '';
-  return `<tr id="tx-${Number(t.id)}"${t.id === FOCUS ? ' class="hl"' : ''}><td>${esc(t.date)}</td><td class="n ${cls(t.amount_main)}">${num(t.amount_main)}</td><td class="n">${num(t.balance_main)}</td>${native}${origin}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
-  <td><button class="link" onclick="editTx(${esc(JSON.stringify(t))})">modifier</button><button class="link" onclick="delTx(${Number(t.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
+  return `<tr id="tx-${Number(t.id)}"${t.id === FOCUS ? ' class="hl"' : ''}><td>${esc(t.date)}</td>${amount}<td class="n">${num(t.balance_main)}</td>${native}${origin}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
+  <td class="s actions">${iconButton('pen', 'Modifier', edit)}${iconButton('trash', 'Supprimer', del)}</td></tr>`;
 }
 const NATIVE_KEY = {y1: 'n1', y3: 'n3', y5: 'n5', y8: 'n8', y_all: 'n_all'};
 const INTEREST_PERIODS = [['1 an', 'y1'], ['3 ans', 'y3'], ['5 ans', 'y5'], ['8 ans', 'y8'], ['Depuis le début', 'y_all']];
@@ -173,17 +185,22 @@ function interestsTable(interests, currency){
   return `<table>${rows}</table>`;
 }
 function depositRow(d, aid){
-  return `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_main)}</td><td><button class="link" onclick="delDep(${Number(d.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
+  const del = `delDep(${Number(d.id)},'${jsq(aid)}')`;
+  return `<tr><td>${esc(d.date)}</td><td class="n">${num(d.amount_main)}</td><td class="s actions">${iconButton('trash', 'Supprimer', del)}</td></tr>`;
+}
+/* Layout of an account page (CSS grid): wide screen = transactions on the left, yields then deposits on the right;
+   stacked = yields, transactions, then deposits at the bottom of the page */
+function yieldsPanel(info, a){
+  return `<div class="g-yields"><h3>Rendements nets</h3>${interestsTable(info.interests, a.currency)}
+  <button onclick="recalcOne('${jsq(a.id)}')">Recalculer</button></div>`;
 }
 function depositsPanel(info, a, cur){
-  return `<div class="pane"><h3>Rendements nets</h3>${interestsTable(info.interests, a.currency)}
-  <button onclick="recalcOne('${jsq(a.id)}')">Recalculer</button>
-  <h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
-  <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;
+  return `<div class="g-deposits"><h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
+  <div class="scroll" style="max-height:340px;max-width:460px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;
 }
-const txColumns = (foreign, cur, hasFx) => [
-  {label: 'Date', value: t => t.date}, {label: 'Montant ' + sym(MASTER), num: true, value: t => t.amount_main}, {label: 'Solde ' + sym(MASTER), num: true, value: t => t.balance_main},
-  ...(foreign ? [{label: `Montant ${cur}`, num: true, value: t => t.native_amount}, {label: `Solde ${cur}`, num: true, value: t => t.native_balance}] : []),
+const txColumns = (foreign, cur, hasFx, amounts = true) => [
+  {label: 'Date', value: t => t.date}, ...(amounts ? [{label: 'Montant ' + sym(MASTER), num: true, value: t => t.amount_main}] : []), {label: 'Solde ' + sym(MASTER), num: true, value: t => t.balance_main},
+  ...(foreign && amounts ? [{label: `Montant ${cur}`, num: true, value: t => t.native_amount}] : []), ...(foreign ? [{label: `Solde ${cur}`, num: true, value: t => t.native_balance}] : []),
   ...(hasFx ? [{label: "Montant d'origine", num: true, value: t => t.fx_amount}, {label: "Devise d'origine", value: t => t.fx_currency}] : []),
   {label: 'Description', value: t => t.description}, {label: 'Sous-cat.', value: t => t.subcategory}, {label: '', sort: false, filter: false, value: () => null},
 ];
@@ -224,8 +241,8 @@ async function account(id, msg = '', focus = null){
   <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
-  <div class="row" style="align-items:start"><div class="pane pane-wide">${dataTable(txColumns(foreign, sym(a.currency), hasFx), tr, t => txRow(t, foreign, a.id, hasFx), {noun: 'écritures (les plus récentes)'})}</div>
-  ${hasDep ? depositsPanel(info, a, cur) : ''}</div>`;
+  <div class="account-grid ${hasDep ? '' : 'solo'}"><div class="g-tx">${dataTable(txColumns(foreign, sym(a.currency), hasFx, showsAmount(a)), tr, t => txRow(t, foreign, a.id, hasFx, showsAmount(a)), {noun: 'écritures (les plus récentes)'})}</div>
+  ${hasDep ? yieldsPanel(info, a) + depositsPanel(info, a, cur) : ''}</div>`;
   EDIT = null;
   $('#tx-' + focus)?.scrollIntoView?.({block: 'center'});
 }
