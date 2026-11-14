@@ -359,7 +359,7 @@ async function searchRun(){
 
 /* import */
 let IMPORT = null;
-function b64(buf){ let s = ''; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); }
+function b64(buf){ let s = ''; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i += 0x8000) s += String.fromCodePoint.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); }
 async function importPreview(id){
   const f = $('#imp_file').files[0]; if (!f) return;
   IMPORT = {filename: f.name, data: b64(await f.arrayBuffer()), bank: $('#imp_bank').value};

@@ -57,6 +57,8 @@ test('b64 encodes buffers, including larger than one chunk', () => {
   assert.equal(ctx.b64(Buffer.from('hello')), Buffer.from('hello').toString('base64'));
   const big = Buffer.alloc(0x8000 * 2 + 17, 7);
   assert.equal(ctx.b64(big), big.toString('base64'));
+  const bytes = Buffer.from([0, 127, 128, 200, 255]);
+  assert.equal(ctx.b64(bytes), bytes.toString('base64'));   // all the byte values, not only the ASCII ones
 });
 
 test('api returns the parsed body and sends JSON requests', async () => {
