@@ -16,6 +16,7 @@ th{color:var(--mut);font-weight:600;white-space:nowrap} td.n,th.n{text-align:rig
 td,.d,.big,svg text,.chart-window,.chart-tip b,.chart-tip .mut{font-family:var(--font-data)}
 td.s,td a,td button{font-family:var(--font)}
 td.late-3{color:var(--neg)} td.late-1{color:var(--warn)}
+tr.total td{font-size:16px;font-weight:700;border-bottom:0;border-top:2px solid var(--line)}
 tr.hl td{background:rgba(255,190,0,.28)}
 tr.click{cursor:pointer} tr.click:hover{background:rgba(127,127,127,.1)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0}

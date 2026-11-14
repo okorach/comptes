@@ -48,6 +48,7 @@ function tableRefresh(id){
   const rows = tableRows(t);
   $('#tb-' + id).innerHTML = rows.length ? rows.map(t.row).join('') : `<tr><td colspan="${t.cols.length}" class="mut s">Aucune ligne</td></tr>`;
   $('#tc-' + id).textContent = tableCount(t, rows.length);
+  if (t.footer) $('#tf-' + id).innerHTML = t.footer(rows);
   t.cols.forEach((col, i) => {
     const dir = t.sort?.col === i ? t.sort.dir : null, btn = $(`#ts-${id}-${i}`);
     if (!btn) return;
@@ -97,13 +98,15 @@ function tableWithOptions(col, rows){
 }
 
 /* cols: [{label, value: row => sortable/filterable value, num?: right-aligned, sort?: false, filter?: false | 'text'}], row: row => '<tr>…</tr>'.
-   opt: {noun: what the rows are called in the counter, style: style of the scrolling container} */
+   opt: {noun: what the rows are called in the counter, style: style of the scrolling container, footer: rows => '<tr>…</tr>' of a last line (totals)
+   computed on the rows shown, so it follows the filters} */
 function dataTable(cols, rows, row, opt = {}){
   const id = ++tableSeq, c = cols.map(col => tableWithOptions(col, rows));
-  const t = {cols: c, rows, row, noun: opt.noun || 'lignes', filters: c.map(() => null), sort: null};
+  const t = {cols: c, rows, row, noun: opt.noun || 'lignes', footer: opt.footer, filters: c.map(() => null), sort: null};
   tables.set(id, t);
   tables.delete(id - 50);  // the page only shows a few tables at a time: keep the registry bounded
+  const foot = opt.footer ? '<tfoot id="tf-' + id + '">' + opt.footer(rows) + '</tfoot>' : '';
   const head = c.map((col, i) => tableHeadCell(id, col, i)).join(''), filters = c.map((col, i) => tableFilterCell(id, col, i)).join('');
   return `<div class="scroll" style="${opt.style || ''}"><table class="data"><thead><tr>${head}</tr><tr class="filters">${filters}</tr></thead>` +
-    `<tbody id="tb-${id}">${rows.map(row).join('')}</tbody></table></div><div class="mut" id="tc-${id}">${tableCount(t, rows.length)}</div>`;
+    `<tbody id="tb-${id}">${rows.map(row).join('')}</tbody>${foot}</table></div><div class="mut" id="tc-${id}">${tableCount(t, rows.length)}</div>`;
 }

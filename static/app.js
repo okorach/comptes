@@ -66,10 +66,10 @@ async function home(){
   ${drawChart(nw.map(p => p.month), [
     {name: `Épargne mensuelle (moy. ${SAVINGS_MONTHS} mois)`, color: 'var(--pos-light)', type: 'bar', axis: 'right', unit: sym(MASTER) + '/mois', values: monthlySavings(nw.map(p => p.total))},
     {name: 'Patrimoine', color: 'var(--acc)', type: 'line', values: nw.map(p => p.total)}], {xticks: 12, unit: sym(MASTER)})}
+  <h3>Comptes</h3>${dataTable(homeColumns(), shown.sort((a, b) => b.balance_main - a.balance_main), homeRow, {noun: 'comptes', footer: homeTotal})}
   <div class="row" style="align-items:start">${paneStart('bank', 'Par banque')}${tbl(sumBy(a => a.bank))}</details>
   ${paneStart('year', 'Par année de disponibilité')}${tbl(Object.entries(byYear).sort((a, b) => a[0] - b[0]).map(([k, v]) => [k === '0' ? 'Immédiate' : k, v]))}</details>
-  ${paneStart('type', 'Par type')}${tbl(sumBy(a => a.type))}</details></div>
-  <h3>Comptes</h3>${dataTable(homeColumns(), shown.sort((a, b) => b.balance_main - a.balance_main), homeRow, {noun: 'comptes'})}`;
+  ${paneStart('type', 'Par type')}${tbl(sumBy(a => a.type))}</details></div>`;
 }
 const homeColumns = () => [
   {label: 'Compte', filter: false, value: a => a.id}, {label: 'Solde ' + sym(MASTER), num: true, filter: false, value: a => a.balance_main},
@@ -86,6 +86,11 @@ function lateness(a, today = new Date()){
 }
 /* Shown when hovering on the name of the account (replaces the old columns): availability, and last update when it is late */
 const availabilityText = a => 'Disponibilité: ' + (a.availability || 'Immédiate') + (lateness(a) ? '\nDernière mise à jour: ' + a.last_date.slice(0, 10) : '');
+/* Last line: total of the balances in the master currency of the accounts shown (so, of the filtered ones) */
+function homeTotal(rows){
+  const total = rows.reduce((t, a) => t + a.balance_main, 0);
+  return `<tr class="total"><td class="s">Total</td><td class="n ${cls(total)}">${num(total)}</td><td></td><td></td><td></td></tr>`;
+}
 const homeRow = a => `<tr class="click" onclick="location.hash='#/account/${enc(a.id)}'"><td class="${lateness(a)}" title="${esc(availabilityText(a))}">${esc(a.id)}</td><td class="n ${cls(a.balance_main)}">${num(a.balance_main)}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td></tr>`;
 
 /* ------------------------------------------------------------------ spending */
