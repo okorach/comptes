@@ -34,3 +34,7 @@ test('names that come from the data are marked as dynamic, fixed labels of table
   assert.match(els['#main'].innerHTML, /<h2><span class="d">Courant<\/span> <span class="mut d"/);
   assert.match(els['#main'].innerHTML, /<td class="s">1 an<\/td>/);
 });
+
+test('the icons of a transaction row stay on one line', () => {
+  assert.match(read('style.css'), /td\.actions\{[^}]*white-space:nowrap/);
+});
