@@ -140,11 +140,16 @@ async function recalc(){
 
 /* ------------------------------------------------------------------ account */
 let FOCUS = null;  // transaction to show (highlighted) in the account page: the one found by the search
-function txRow(t, foreign, aid, hasFx = false){
-  const native = foreign ? `<td class="n mut">${num(t.native_amount, '')}</td><td class="n mut">${num(t.native_balance, '')}</td>` : '';
+/* Accounts whose transactions are shown without the « Montant » columns (the balance is what matters, the amounts are the movements of the market) */
+const NO_AMOUNT_TYPES = ['Assurance Vie', 'PER', 'PERCO', 'PEA', 'Actions', 'PEE', 'Investment'];
+const showsAmount = a => !NO_AMOUNT_TYPES.includes(a.type);
+function txRow(t, foreign, aid, hasFx = false, amounts = true){
+  const nativeAmount = foreign && amounts ? `<td class="n mut">${num(t.native_amount, '')}</td>` : '';
+  const native = foreign ? nativeAmount + `<td class="n mut">${num(t.native_balance, '')}</td>` : '';
+  const amount = amounts ? `<td class="n ${cls(t.amount_main)}">${num(t.amount_main)}</td>` : '';
   const origin = hasFx ? `<td class="n mut">${num(t.fx_amount, '')}</td><td>${esc(t.fx_currency)}</td>` : '';
   const budget = t.in_budget ? ` <span class="mut">(${esc(t.in_budget)})</span>` : '';
-  return `<tr id="tx-${Number(t.id)}"${t.id === FOCUS ? ' class="hl"' : ''}><td>${esc(t.date)}</td><td class="n ${cls(t.amount_main)}">${num(t.amount_main)}</td><td class="n">${num(t.balance_main)}</td>${native}${origin}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
+  return `<tr id="tx-${Number(t.id)}"${t.id === FOCUS ? ' class="hl"' : ''}><td>${esc(t.date)}</td>${amount}<td class="n">${num(t.balance_main)}</td>${native}${origin}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
   <td><button class="link" onclick="editTx(${esc(JSON.stringify(t))})">modifier</button><button class="link" onclick="delTx(${Number(t.id)},'${jsq(aid)}')">suppr.</button></td></tr>`;
 }
 const NATIVE_KEY = {y1: 'n1', y3: 'n3', y5: 'n5', y8: 'n8', y_all: 'n_all'};
@@ -181,9 +186,9 @@ function depositsPanel(info, a, cur){
   <h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
   <div class="scroll" style="max-height:340px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;
 }
-const txColumns = (foreign, cur, hasFx) => [
-  {label: 'Date', value: t => t.date}, {label: 'Montant ' + sym(MASTER), num: true, value: t => t.amount_main}, {label: 'Solde ' + sym(MASTER), num: true, value: t => t.balance_main},
-  ...(foreign ? [{label: `Montant ${cur}`, num: true, value: t => t.native_amount}, {label: `Solde ${cur}`, num: true, value: t => t.native_balance}] : []),
+const txColumns = (foreign, cur, hasFx, amounts = true) => [
+  {label: 'Date', value: t => t.date}, ...(amounts ? [{label: 'Montant ' + sym(MASTER), num: true, value: t => t.amount_main}] : []), {label: 'Solde ' + sym(MASTER), num: true, value: t => t.balance_main},
+  ...(foreign && amounts ? [{label: `Montant ${cur}`, num: true, value: t => t.native_amount}] : []), ...(foreign ? [{label: `Solde ${cur}`, num: true, value: t => t.native_balance}] : []),
   ...(hasFx ? [{label: "Montant d'origine", num: true, value: t => t.fx_amount}, {label: "Devise d'origine", value: t => t.fx_currency}] : []),
   {label: 'Description', value: t => t.description}, {label: 'Sous-cat.', value: t => t.subcategory}, {label: '', sort: false, filter: false, value: () => null},
 ];
@@ -224,7 +229,7 @@ async function account(id, msg = '', focus = null){
   <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
-  <div class="row" style="align-items:start"><div class="pane pane-wide">${dataTable(txColumns(foreign, sym(a.currency), hasFx), tr, t => txRow(t, foreign, a.id, hasFx), {noun: 'écritures (les plus récentes)'})}</div>
+  <div class="row" style="align-items:start"><div class="pane pane-wide">${dataTable(txColumns(foreign, sym(a.currency), hasFx, showsAmount(a)), tr, t => txRow(t, foreign, a.id, hasFx, showsAmount(a)), {noun: 'écritures (les plus récentes)'})}</div>
   ${hasDep ? depositsPanel(info, a, cur) : ''}</div>`;
   EDIT = null;
   $('#tx-' + focus)?.scrollIntoView?.({block: 'center'});

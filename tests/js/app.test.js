@@ -595,3 +595,38 @@ test('closed accounts are hidden by default, shown when « Montrer les comptes f
   await ctx.home();
   assert.doesNotMatch(els['#main'].innerHTML, />Ferme<\/td>/);
 });
+
+/* ---------------------------------------------------------------- accounts shown without the amounts */
+const typedPage = (type, currency = 'EUR') => load(async url => ({json: async () => (url.includes('transactions') ? [TX] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR', 'CHF'], master_currency: 'EUR'}
+  : {...FX_ACCOUNT, account: {...FX_ACCOUNT.account, type, currency}})}));
+const heads = html => [...html.match(/<table class="data"><thead><tr>(.*?)<\/tr>/s)[1].matchAll(/<th[^>]*>([^<]*?)(?: <button|<\/th>)/g)].map(m => m[1]).filter(Boolean);
+
+test('the transactions of Assurance Vie, PER, PERCO, PEA, Actions, PEE and Investment accounts have no Montant column', async () => {
+  for (const type of ['Assurance Vie', 'PER', 'PERCO', 'PEA', 'Actions', 'PEE', 'Investment']) {
+    const {ctx, els} = typedPage(type);
+    await ctx.account('X');
+    const html = els['#main'].innerHTML;
+    assert.deepEqual(heads(html), ['Date', 'Solde €', 'Description', 'Sous-cat.'], type);
+    const row = html.match(/<tr id="tx-1">.*?<\/tr>/s)[0];
+    assert.equal((row.match(/<td/g) || []).length, 5, type);   // date, balance, description, sub-category, buttons
+  }
+});
+
+test('the other accounts keep their Montant columns', async () => {
+  for (const type of ['Courant', 'Livret A', 'PEL']) {
+    const {ctx, els} = typedPage(type);
+    await ctx.account('X');
+    assert.deepEqual(heads(els['#main'].innerHTML), ['Date', 'Montant €', 'Solde €', 'Description', 'Sous-cat.'], type);
+  }
+});
+
+test('in a foreign currency, both the Montant columns are hidden and the balances stay', async () => {
+  const {ctx, els} = typedPage('Actions', 'CHF');
+  await ctx.account('X');
+  const html = els['#main'].innerHTML;
+  assert.deepEqual(heads(html), ['Date', 'Solde €', 'Solde CHF', 'Description', 'Sous-cat.']);
+  assert.equal((html.match(/<tr id="tx-1">.*?<\/tr>/s)[0].match(/<td/g) || []).length, 6);
+  const other = typedPage('Courant', 'CHF');
+  await other.ctx.account('X');
+  assert.deepEqual(heads(other.els['#main'].innerHTML), ['Date', 'Montant €', 'Solde €', 'Montant CHF', 'Solde CHF', 'Description', 'Sous-cat.']);
+});
