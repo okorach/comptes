@@ -266,7 +266,7 @@ test('the transactions of an account have these filters: no balance filter, a ra
 test('a button clears all the filters of the table (and empties the controls of the header); it is only shown when a filter is active', () => {
   const env = setup(TXCOLS, TX);
   const clear = () => env.els['#tclr-' + env.id];
-  assert.match(env.html, /id="tclr-\d+" hidden onclick="tableClearFilters\(\d+\)">Effacer les filtres/);   // nothing to clear at first
+  assert.match(env.html, /<button type="button" class="clear-filters" id="tclr-\d+" hidden onclick="tableClearFilters\(\d+\)">Effacer les filtres/);   // nothing to clear at first
   apply(env, env.id, 1, '10');
   env.ctx.tableToggleValue(env.id, 4, tablesOf(env.ctx).get(env.id).cols[4].values.indexOf('Salaire'), false);
   env.ctx.tableFilter(env.id, 3, 'marche');
@@ -280,4 +280,27 @@ test('a button clears all the filters of the table (and empties the controls of 
   assert.deepEqual([typed.value, chosen.value], ['', '']);
   assert.deepEqual([0, 1, 4].map(i => button(env, i)), ['filtrer', 'filtrer', 'filtrer']);
   assert.equal(env.count(), '5 lignes');
+});
+
+test('when a column has the clear button, it is the icon of the filter row, in the column of the row buttons, with a tooltip, hidden until a filter is active', () => {
+  const cols = [...TXCOLS, {label: '', sort: false, filter: false, clearButton: true, value: () => null}];
+  const env = setup(cols, TX);
+  assert.match(env.html, /<th class="s actions"><button class="icon" id="tclr-\d+" hidden title="Supprimer les filtres" aria-label="Supprimer les filtres" onclick="tableClearFilters\(\d+\)"><svg[^>]*><path d="M3 4h16/);
+  assert.doesNotMatch(env.html, /Effacer les filtres/);                                    // not a second button next to the counter
+  apply(env, env.id, 1, '10');
+  assert.equal(env.els['#tclr-' + env.id].hidden, false);
+  env.ctx.tableClearFilters(env.id);
+  assert.equal(env.els['#tclr-' + env.id].hidden, true);
+  assert.equal(ids(env.body()).length, 5);
+});
+
+test('the transactions of an account have the clear icon in the filter row', async () => {
+  const tx = {id: 1, date: '2024-01-01', amount_main: -5, native_amount: -5, balance_main: 1, description: 'x', in_budget: null};
+  const account = {account: {id: 'X', type: 'Courant', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []};
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [tx] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR']} : account)}));
+  await new Promise(r => setTimeout(r, 10));
+  await ctx.account('X');
+  const html = els['#main'].innerHTML;
+  assert.match(html, /<tr class="filters">.*<th class="s actions"><button class="icon" id="tclr-\d+" hidden title="Supprimer les filtres"/s);
+  assert.doesNotMatch(html, /Effacer les filtres/);
 });

@@ -116,6 +116,8 @@ function tableFilterSummary(col, f){
 }
 
 function tableFilterCell(id, col, i){
+  // the icon that removes all the filters, in the filter row, in the column of the buttons of the rows (hidden while there is no filter)
+  if (col.clearButton) return `<th class="s actions">${iconButton('filterOff', 'Supprimer les filtres', `tableClearFilters(${id})`, `id="tclr-${id}" hidden`)}</th>`;
   if (col.filter === false) return '<th></th>';
   const cell = col.num ? '<th class="n">' : '<th>';  // the filter of a numeric column sits under its right-aligned header
   const label = `aria-label="Filtrer ${esc(col.label)}"`;
@@ -136,6 +138,7 @@ function tableWithOptions(col, rows){
 }
 
 /* cols: [{label, value: row => sortable/filterable value, num?: right-aligned, sort?: false,
+   clearButton?: true (the filter cell of this column holds the icon that clears the filters),
    filter?: false | 'text' (contains) | 'range' (pop-up: min and max, either may be empty; input: 'date' for dates) | 'checks' (pop-up: check boxes of the values)}],
    row: row => '<tr>…</tr>'.
    opt: {noun: what the rows are called in the counter, style: style of the scrolling container, footer: rows => '<tr>…</tr>' of a last line (totals)
@@ -145,10 +148,12 @@ function dataTable(cols, rows, row, opt = {}){
   const t = {cols: c, rows, row, noun: opt.noun || 'lignes', footer: opt.footer, filters: c.map(() => null), sort: null};
   tables.set(id, t);
   tables.delete(id - 50);  // the page only shows a few tables at a time: keep the registry bounded
+  const clearInRow = c.some(col => col.clearButton);   // else the button to clear the filters is next to the counter
+  const clearLine = clearInRow ? '' : ` <button type="button" class="clear-filters" id="tclr-${id}" hidden onclick="tableClearFilters(${id})">Effacer les filtres</button>`;
   const foot = opt.footer ? '<tfoot id="tf-' + id + '">' + opt.footer(rows) + '</tfoot>' : '';
   const head = c.map((col, i) => tableHeadCell(id, col, i)).join(''), filters = c.map((col, i) => tableFilterCell(id, col, i)).join('');
   return `<div class="scroll" style="${opt.style || ''}"><table class="data"><thead><tr>${head}</tr><tr class="filters">${filters}</tr></thead>` +
-    `<tbody id="tb-${id}">${rows.map(row).join('')}</tbody>${foot}</table></div><div class="mut table-count"><span id="tc-${id}">${tableCount(t, rows.length)}</span> <button type="button" class="clear-filters" id="tclr-${id}" hidden onclick="tableClearFilters(${id})">Effacer les filtres</button></div>`;
+    `<tbody id="tb-${id}">${rows.map(row).join('')}</tbody>${foot}</table></div><div class="mut table-count"><span id="tc-${id}">${tableCount(t, rows.length)}</span>${clearLine}</div>`;
 }
 
 /* ------------------------------------------------------------ pop-up of the filters on a range or on a list of values */
