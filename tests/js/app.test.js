@@ -1016,3 +1016,22 @@ test('the month, quarter or year in progress gets an orange bullet in the spendi
   assert.match(flag('2026-11', 'month', now), /stale-dot warn.*Mois incomplet/);
   assert.equal(flag('2026-10', 'month', now), '');
 });
+
+test('the patrimoine chart has the default height, and a button shows it 50 % taller (420) until the next navigation', async () => {
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('networth') ? [{month: '2024-01', total: 1}, {month: '2024-02', total: 2}] : url.includes('meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await settle();
+  await ctx.home();
+  assert.match(els['#main'].innerHTML, /<svg viewBox="0 0 1000 280"/);
+  assert.match(els['#main'].innerHTML, /onclick="toggleNetworthHeight\(\)">Agrandir le graphique/);
+  await ctx.toggleNetworthHeight();
+  await settle();
+  assert.match(els['#main'].innerHTML, /<svg viewBox="0 0 1000 420"/);
+  assert.match(els['#main'].innerHTML, />Réduire le graphique/);
+  await ctx.toggleNetworthHeight();
+  await settle();
+  assert.match(els['#main'].innerHTML, /<svg viewBox="0 0 1000 280"/);
+  await ctx.toggleNetworthHeight();
+  await settle();
+  await ctx.route();                                    // navigating resets it
+  assert.match(els['#main'].innerHTML, /<svg viewBox="0 0 1000 280"/);
+});
