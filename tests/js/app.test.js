@@ -1101,3 +1101,43 @@ test('the import has no format selector when the bank of the account is known, e
   await unknown.ctx.account('X');
   assert.match(unknown.els['#main'].innerHTML, /<select id="imp_bank"[^>]*><option >BoursoBank<\/option><option >ING<\/option><option >generic<\/option><\/select>/);
 });
+
+test('the new entry form of an account in the currency of the application has a single amount and no original currency', async () => {
+  const account = {account: {id: 'Courant', type: 'Courant', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []};
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? FX_META : account)}));
+  await settle();
+  await ctx.account('Courant');
+  const html = els['#main'].innerHTML;
+  assert.equal((html.match(/<label>Montant/g) || []).length, 1);
+  assert.match(html, /<label>Montant \(€\)<input id="f_amt" size="12"><\/label>/);          // no "auto" placeholder: nothing to convert
+  assert.doesNotMatch(html, /f_fxc|f_fxa|Devise d'origine|Montant d'origine/);
+});
+
+test('the form of an account in another currency still has the amount and the original amount', async () => {
+  const {ctx, els} = fxPage([]);
+  await ctx.account('Suisse');
+  const html = els['#main'].innerHTML;
+  assert.match(html, /<label>Montant \(CHF\)<input id="f_amt"[^>]*placeholder="auto"/);
+  assert.match(html, /Devise d'origine/);
+  assert.match(html, /Montant d'origine/);
+});
+
+test('editing a transaction of an account in the application currency keeps its original amount, which the form does not show', async () => {
+  const calls = [];
+  const account = {account: {id: 'Courant', type: 'Courant', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []};
+  const {ctx, els, mk} = load(async (url, init) => {
+    if (init?.body) calls.push({url, method: init.method, body: JSON.parse(init.body)});
+    return {json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? FX_META : account)};
+  });
+  await settle();
+  await ctx.account('Courant');
+  mk('#f_date'); mk('#f_amt');
+  ctx.document.querySelector = id => (id === '#f_fxa' || id === '#f_fxc' ? null : mk(id));   // the form has no field for the original amount
+  const t = {id: 9, date: '2024-01-01', description: 'US', native_amount: -10, fx_currency: 'USD', fx_amount: -11, fx_auto: 1};
+  ctx.editTx(t);
+  assert.equal(els['#f_amt'].value, -10);                  // the converted amount is shown, since the original one is not
+  await ctx.saveTx('Courant');
+  const put = calls.find(c => c.method === 'PUT');
+  assert.equal(put.body.fx_currency, 'USD');
+  assert.equal(put.body.fx_amount, -11);
+});
