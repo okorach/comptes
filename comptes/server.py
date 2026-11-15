@@ -131,7 +131,8 @@ class Handler(BaseHTTPRequestHandler):
                     return {"ok": True}
                 dep = con.execute("SELECT * FROM deposits WHERE account=? ORDER BY date DESC", (acc,)).fetchall()
                 it = con.execute("SELECT * FROM interests WHERE account=?", (acc,)).fetchone()
-                return {"account": dict(a), "deposits": [dict(r) for r in dep], "interests": dict(it) if it else None}
+                return {"account": dict(a), "deposits": [dict(r) for r in dep], "interests": dict(it) if it else None,
+                        "import_format": bankimport.import_format(a["bank"]), "import_formats": [*bankimport.BANK_FORMATS, bankimport.GENERIC_FORMAT]}
             if sub == "transactions":
                 if m == "POST":
                     return {"id": ops.add_transaction(con, acc, self._body())}
@@ -147,7 +148,7 @@ class Handler(BaseHTTPRequestHandler):
             if sub == "import" and m == "POST":
                 d = self._body()
                 subs = [(r[0], r[1]) for r in con.execute("SELECT pattern,replacement FROM substitutions ORDER BY id")]
-                bank = d.get("bank") or a["bank"]
+                bank = bankimport.import_format(a["bank"]) or d.get("bank") or a["bank"]   # the format follows the bank when it is known
                 parsed = bankimport.parse(bank, a, d["filename"], base64.b64decode(d["data"]), subs)
                 new, dup = bankimport.split_new(con, acc, parsed)
                 if d.get("commit"):
