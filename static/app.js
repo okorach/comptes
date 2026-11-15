@@ -455,9 +455,26 @@ async function admin(msg = ''){
   <label>Date<input type="date" id="x_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Taux<input id="x_rate" size="8"></label><button onclick="addFx()">Ajouter</button></div>
   <div class="row"><button onclick="refreshRates()">Mettre à jour depuis Internet</button><span id="fx_status" class="mut"></span></div>
   <div class="mut" style="font-size:12px">Un taux par semaine (taux de référence de la BCE, via frankfurter.dev), depuis la plus ancienne donnée de chaque devise. Les semaines qui ont déjà un taux ne sont pas modifiées. Mise à jour automatique au démarrage de l'application si Internet est disponible ; les soldes sont alors recalculés.</div>
-  <div id="fxl"></div></div>`;
+  <div id="fxl"></div></div>
+  <div class="card"><b>Catégories</b> <span class="mut">(catégorie générale de chaque catégorie)</span><div id="cat_err" class="err"></div><div id="catmap"></div>
+  <div class="mut" style="font-size:12px">Une catégorie générale vide : la catégorie n'a pas de catégorie générale (« (sans catégorie) » dans les dépenses). La modification est enregistrée en quittant le champ.</div></div>`;
   numberFormatPreview();
-  await fxList();
+  await Promise.all([fxList(), categoryMapping()]);
+}
+/* the table of the general category of every category */
+async function categoryMapping(){
+  const rows = await api('categories'), generals = [...new Set(rows.map(r => r.category).filter(Boolean))].toSorted(tableCompare);
+  const line = r => `<tr><td>${esc(r.subcategory)}</td><td><input class="cat-general" list="generals" size="24" value="${esc(r.category ?? '')}" data-sub="${esc(r.subcategory)}" aria-label="Catégorie générale de ${esc(r.subcategory)}" onchange="saveGeneralCategory(this)"></td></tr>`;
+  $('#catmap').innerHTML = `<datalist id="generals">${generals.map(g => `<option>${esc(g)}</option>`).join('')}</datalist>
+    <table><tr><th>Catégorie</th><th>Catégorie générale</th></tr>${rows.map(line).join('')}</table>`;
+}
+async function saveGeneralCategory(input){
+  try {
+    await api('categories', 'POST', {subcategory: input.dataset.sub, category: input.value});
+    META = null;
+    $('#cat_err').textContent = '';
+    await categoryMapping();
+  } catch (e) { $('#cat_err').textContent = e.message; }
 }
 async function setMaster(){
   try {

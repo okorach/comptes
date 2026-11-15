@@ -93,6 +93,17 @@ class ServerTest(unittest.TestCase):
             self.call("POST", "/api/master_currency", {"currency": "EUR"})
         self.assertEqual(self.call("GET", "/api/meta")["master_currency"], "EUR")
 
+    def test_general_category_of_each_category(self):
+        rows = {r["subcategory"]: r["category"] for r in self.call("GET", "/api/categories")}
+        self.assertEqual(rows["Courses"], "Alimentation")
+        self.assertEqual(self.call("POST", "/api/categories", {"subcategory": "Courses", "category": " Maison "}), {"ok": True})
+        self.assertEqual({r["subcategory"]: r["category"] for r in self.call("GET", "/api/categories")}["Courses"], "Maison")
+        self.assertIn("Maison", [c["category"] for c in self.call("GET", "/api/meta")["categories"]])
+        self.assertEqual(self.call("POST", "/api/categories", {"subcategory": "Courses", "category": ""}), {"ok": True})   # no general category
+        self.assertIsNone({r["subcategory"]: r["category"] for r in self.call("GET", "/api/categories")}.get("Courses"))
+        self.assertEqual(self.call("POST", "/api/categories", {"subcategory": " ", "category": "x"})["HTTP"], 400)
+        self.call("POST", "/api/categories", {"subcategory": "Courses", "category": "Alimentation"})   # as it was
+
     def test_number_format(self):
         self.assertEqual(self.call("GET", "/api/meta")["number_format"], {"decimal": ".", "thousands": " "})
         self.assertEqual(self.call("POST", "/api/number_format", {"decimal": ".", "thousands": ","}), {"ok": True})

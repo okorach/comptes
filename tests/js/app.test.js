@@ -277,6 +277,27 @@ test('administration page lets the master currency be changed, and reloads every
   assert.match(els['#main'].innerHTML, /Devise principale modifiée/);
 });
 
+test('administration page: a table gives the general category of each category, saved when the field changes', async () => {
+  const calls = [];
+  let rows = [{subcategory: 'Courses', category: 'Alimentation'}, {subcategory: 'Paie', category: 'Salaire'}, {subcategory: 'Neuf', category: null}];
+  const {ctx, els, mk} = load(async (url, init) => {
+    calls.push({url, body: init?.body && JSON.parse(init.body)});
+    if (url.endsWith('/meta')) return {json: async () => ({categories: [], types: [], banks: [], currencies: ['EUR'], master_currency: 'EUR'})};
+    return {json: async () => (url.endsWith('/categories') ? rows : [])};
+  });
+  await settle();
+  await ctx.admin();
+  const html = els['#catmap'].innerHTML;
+  assert.match(html, /<th>Catégorie<\/th><th>Catégorie générale<\/th>/);
+  assert.match(html, /<td>Courses<\/td><td><input[^>]*value="Alimentation"[^>]*data-sub="Courses"/);
+  assert.match(html, /data-sub="Neuf"/);
+  assert.match(html, /<datalist id="generals"><option>Alimentation<\/option><option>Salaire<\/option><\/datalist>/);
+  rows = [{subcategory: 'Neuf', category: 'Divers'}];
+  await ctx.saveGeneralCategory({dataset: {sub: 'Neuf'}, value: 'Divers'});
+  assert.deepEqual(calls.find(c => c.url === '/api/categories' && c.body).body, {subcategory: 'Neuf', category: 'Divers'});
+  assert.match(els['#catmap'].innerHTML, /value="Divers"/);   // the table is read again
+});
+
 test('administration page shows the refusal of an unknown master currency', async () => {
   const {ctx, els, mk} = load(async url => ({json: async () => (url.endsWith('/meta') ? {categories: [], types: [], banks: [], currencies: ['EUR'], master_currency: 'EUR'} : url.endsWith('master_currency') ? {error: 'no FX rates for JPY'} : [])}));
   await settle();

@@ -150,6 +150,19 @@ def set_number_format(con: sqlite3.Connection, decimal: str, thousands: str) -> 
     con.commit()
 
 
+def set_general_category(con: sqlite3.Connection, subcategory: str, category: str) -> None:
+    """Maps a category (the sub-category of the transactions) to a general category; an empty general category removes the mapping."""
+    sub = (subcategory or "").strip()
+    if not sub:
+        raise ValueError("Catégorie requise")
+    cat = (category or "").strip()
+    if cat:
+        con.execute("INSERT OR REPLACE INTO categories VALUES(?,?)", (sub, cat))
+    else:
+        con.execute("DELETE FROM categories WHERE subcategory=?", (sub,))
+    con.commit()
+
+
 def set_master_currency(con: sqlite3.Connection, currency: str) -> None:
     """Changes the currency of the application: every amount, balance and yield expressed in it is recomputed.
     EUR, or a currency with exchange rates, is required."""
