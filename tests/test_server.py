@@ -104,6 +104,12 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.call("POST", "/api/categories", {"subcategory": " ", "category": "x"})["HTTP"], 400)
         self.call("POST", "/api/categories", {"subcategory": "Courses", "category": "Alimentation"})   # as it was
 
+    def test_default_category_of_an_account(self):
+        self.assertEqual(self.call("PUT", "/api/account/Courant", {"default_category": "Courses"}), {"ok": True})
+        self.assertEqual(self.call("GET", "/api/account/Courant")["account"]["default_category"], "Courses")
+        self.call("PUT", "/api/account/Courant", {"default_category": ""})
+        self.assertIsNone(self.call("GET", "/api/account/Courant")["account"]["default_category"])
+
     def test_number_format(self):
         self.assertEqual(self.call("GET", "/api/meta")["number_format"], {"decimal": ".", "thousands": " "})
         self.assertEqual(self.call("POST", "/api/number_format", {"decimal": ".", "thousands": ","}), {"ok": True})

@@ -216,7 +216,7 @@ async function notDuplicate(tid, aid){
   await account(aid);
   window.scrollTo?.(0, y);   // stay where we were in the list
 }
-function txRow(t, foreign, aid, hasFx = false, amounts = true, duplicates = new Set()){
+function txRow(t, foreign, aid, hasFx = false, amounts = true, duplicates = new Set(), category = true){
   const nativeAmount = foreign && amounts ? `<td class="n mut">${num(t.native_amount, '')}</td>` : '';
   const native = foreign ? nativeAmount + `<td class="n mut">${num(t.native_balance, '')}</td>` : '';
   const flag = duplicates.has(t.id) ? duplicateBubble(t, aid) : '';   // orange bullet left of the amount
@@ -224,7 +224,8 @@ function txRow(t, foreign, aid, hasFx = false, amounts = true, duplicates = new 
   const origin = hasFx ? `<td class="n mut">${num(t.fx_amount, '')}</td><td>${esc(t.fx_currency)}</td>` : '';
   const edit = `editTx(${esc(JSON.stringify(t))})`, del = `delTx(${Number(t.id)},'${jsq(aid)}')`;
   const budget = t.in_budget ? ` <span class="mut">(${esc(t.in_budget)})</span>` : '';
-  return `<tr id="tx-${Number(t.id)}"${t.id === FOCUS ? ' class="hl"' : ''}><td>${esc(t.date)}</td>${amount}<td class="n">${num(t.balance_main)}</td>${native}${origin}<td>${esc(t.description)}</td><td>${esc(t.subcategory)}${budget}</td>
+  const categoryCell = category ? '<td>' + esc(t.subcategory) + budget + '</td>' : '';
+  return `<tr id="tx-${Number(t.id)}"${t.id === FOCUS ? ' class="hl"' : ''}><td>${esc(t.date)}</td>${amount}<td class="n">${num(t.balance_main)}</td>${native}${origin}<td>${esc(t.description)}</td>${categoryCell}
   <td class="s actions">${iconButton('pen', 'Modifier', edit)}${iconButton('trash', 'Supprimer', del)}</td></tr>`;
 }
 const NATIVE_KEY = {y1: 'n1', y3: 'n3', y5: 'n5', y8: 'n8', y_all: 'n_all'};
@@ -265,12 +266,12 @@ function depositsPanel(info, a, cur){
   return `<div class="g-deposits"><h3>Versements</h3><div class="row"><label>Date<input type="date" id="d_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Montant (${cur})<input id="d_amt" size="10"></label><button onclick="addDep('${jsq(a.id)}')">Ajouter</button></div>
   <div class="scroll" style="max-height:340px;max-width:460px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;
 }
-const txColumns = (foreign, cur, hasFx, amounts = true) => [
+const txColumns = (foreign, cur, hasFx, amounts = true, category = true) => [
   {label: 'Date', filter: 'range', input: 'date', value: t => t.date}, ...(amounts ? [{label: 'Montant ' + sym(MASTER), num: true, filter: 'range', value: t => t.amount_main}] : []),
   {label: 'Solde ' + sym(MASTER), num: true, filter: false, value: t => t.balance_main},
   ...(foreign && amounts ? [{label: `Montant ${cur}`, num: true, filter: 'range', value: t => t.native_amount}] : []), ...(foreign ? [{label: `Solde ${cur}`, num: true, filter: false, value: t => t.native_balance}] : []),
   ...(hasFx ? [{label: "Montant d'origine", num: true, value: t => t.fx_amount}, {label: "Devise d'origine", value: t => t.fx_currency}] : []),
-  {label: 'Description', filter: 'text', value: t => t.description}, {label: 'Catégorie', filter: 'checks', value: t => t.subcategory}, {label: '', sort: false, filter: false, clearButton: true, value: () => null},
+  {label: 'Description', filter: 'text', value: t => t.description}, ...(category ? [{label: 'Catégorie', filter: 'checks', value: t => t.subcategory}] : []), {label: '', sort: false, filter: false, clearButton: true, value: () => null},
 ];
 /* Input fields of an entry, depending on the way the balance of the account is kept */
 function modeFields(a, cur){
@@ -279,7 +280,7 @@ function modeFields(a, cur){
   // one amount, in the currency of the account (its conversion to the currency of the application is computed by the server)
   return `<label>Montant (${cur})<input id="f_amt" size="12"></label>`;
 }
-let EDIT = null, EDIT_FX = {};   // EDIT_FX: the original amount of the transaction being edited (entered before, or by an import), kept as it is
+let EDIT = null, EDIT_FX = {}, EDIT_SUB = null;   // EDIT_FX: the original amount of the transaction being edited (entered before, or by an import), kept as it is
 async function account(id, msg = '', focus = null){
   FOCUS = focus;
   const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions'), meta()]);
@@ -288,7 +289,9 @@ async function account(id, msg = '', focus = null){
   const hasDep = !['Courant', 'Autres', null].includes(a.type);
   const bank = a.bank || '';
   const hasFx = tr.some(t => t.fx_currency), duplicates = duplicateIds(tr);
-  const subOpts = '<option value=""></option>' + m.categories.map(c => `<option>${esc(c.subcategory)}</option>`).join('');
+  const categoryOptions = chosen => '<option value=""></option>' + m.categories.map(c => `<option${c.subcategory === chosen ? ' selected' : ''}>${esc(c.subcategory)}</option>`).join('');
+  const fixed = a.default_category || '';   // a default category: all the transactions are in it, the column and the field of the form are not needed
+  const categoryField = fixed ? '' : `<label>Catégorie<select id="f_sub">${categoryOptions('')}</select></label>`;
   const fields = modeFields(a, cur);
   const bankOptions = (info.import_formats ?? []).map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('');
   // the format of the file follows the bank of the account; the selector is only for a bank whose export we cannot read
@@ -297,23 +300,25 @@ async function account(id, msg = '', focus = null){
     ? `<label class="inline">Importer ${formatSelect}<input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : '';
   $('#main').innerHTML = `<h2><span class="d">${esc(a.id)}</span> <span class="mut d" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
   <div class="row">${focus ? '<button onclick="location.hash=\'#/search\'">← Retour à la recherche</button>' : '<button onclick="location.hash=\'#/\'">← Retour</button>'}
+  <label>Catégorie par défaut<select id="a_defcat" onchange="setDefaultCategory('${jsq(a.id)}')">${categoryOptions(fixed)}</select></label>
   <button onclick="${a.status === 'Open' ? 'askCloseAccount' : 'reopenAccount'}('${jsq(a.id)}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
   <a href="/api/account/${enc(a.id)}/export.csv"><button>Exporter CSV</button></a>
   ${importer}</div>
   <div id="imp"></div><div class="ok">${esc(msg)}</div>
   <div class="card"><b id="form_title">Nouvelle écriture</b><div class="row"><label>Date<input type="date" id="f_date" value="${new Date().toISOString().slice(0, 10)}"></label>${fields}
-  <label>Description<input id="f_desc" size="34"></label><label>Catégorie<select id="f_sub">${subOpts}</select></label>
+  <label>Description<input id="f_desc" size="34"></label>${categoryField}
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
-  <div class="account-grid ${hasDep ? '' : 'solo'}"><div class="g-tx">${dataTable(txColumns(foreign, sym(a.currency), hasFx, showsAmount(a)), tr, t => txRow(t, foreign, a.id, hasFx, showsAmount(a), duplicates), {noun: 'écritures'})}</div>
+  <div class="account-grid ${hasDep ? '' : 'solo'}"><div class="g-tx">${dataTable(txColumns(foreign, sym(a.currency), hasFx, showsAmount(a), !fixed), tr, t => txRow(t, foreign, a.id, hasFx, showsAmount(a), duplicates, !fixed), {noun: 'écritures'})}</div>
   ${hasDep ? yieldsPanel(info, a) + depositsPanel(info, a, cur) : ''}</div>`;
   EDIT = null;
   $('#tx-' + focus)?.scrollIntoView?.({block: 'center'});
 }
 function resetForm(){ EDIT = null; $('#form_title').textContent = 'Nouvelle écriture'; ['f_amt', 'f_bal', 'f_qty', 'f_px', 'f_desc', 'f_bud'].forEach(i => { if ($('#' + i)) $('#' + i).value = ''; }); }
 function editTx(t){
-  EDIT = t.id; EDIT_FX = {fx_currency: t.fx_currency, fx_amount: t.fx_amount}; $('#form_title').textContent = 'Modifier l\'écriture #' + t.id;
-  $('#f_date').value = t.date; $('#f_desc').value = t.description || ''; $('#f_sub').value = t.subcategory || '';
+  EDIT = t.id; EDIT_FX = {fx_currency: t.fx_currency, fx_amount: t.fx_amount}; EDIT_SUB = t.subcategory; $('#form_title').textContent = 'Modifier l\'écriture #' + t.id;
+  $('#f_date').value = t.date; $('#f_desc').value = t.description || '';
+  if ($('#f_sub')) $('#f_sub').value = t.subcategory || '';
   if ($('#f_amt')) $('#f_amt').value = t.native_amount ?? '';  // a converted amount is recomputed, not entered
   if ($('#f_bal')) $('#f_bal').value = t.native_balance ?? '';
   if ($('#f_qty')) { $('#f_qty').value = t.qty ?? ''; $('#f_px').value = t.price ?? ''; }
@@ -322,7 +327,7 @@ function editTx(t){
 }
 async function saveTx(id){
   const g = i => $('#' + i) ? $('#' + i).value : null;
-  const body = {date: g('f_date'), description: g('f_desc'), subcategory: g('f_sub'), native_amount: g('f_amt'), native_balance: g('f_bal'), qty: g('f_qty'), price: g('f_px'), in_budget: g('f_bud'), fx_currency: EDIT ? EDIT_FX.fx_currency : null, fx_amount: EDIT ? EDIT_FX.fx_amount : null};   // the original amount of an existing transaction is kept
+  const body = {date: g('f_date'), description: g('f_desc'), subcategory: $('#f_sub') ? g('f_sub') : (EDIT ? EDIT_SUB : null), native_amount: g('f_amt'), native_balance: g('f_bal'), qty: g('f_qty'), price: g('f_px'), in_budget: g('f_bud'), fx_currency: EDIT ? EDIT_FX.fx_currency : null, fx_amount: EDIT ? EDIT_FX.fx_amount : null};   // the original amount of an existing transaction is kept
   try {
     if (!body.date) throw new Error('Date requise');
     if (EDIT) await api('transaction/' + EDIT, 'PUT', body); else await api('account/' + enc(id) + '/transactions', 'POST', body);
@@ -333,6 +338,7 @@ async function delTx(tid, id){
   const ok = await confirmDialog({title: "Supprimer l'écriture ?", message: 'Cette écriture sera définitivement supprimée et les soldes du compte seront recalculés.', confirmLabel: 'Supprimer'});
   if (ok) { await api('transaction/' + tid, 'DELETE'); await account(id, 'Écriture supprimée'); }
 }
+async function setDefaultCategory(id){ await api('account/' + enc(id), 'PUT', {default_category: $('#a_defcat').value}); await account(id); }
 async function setStatus(id, status){ await api('account/' + enc(id), 'PUT', {status}); await account(id); }
 const reopenAccount = id => setStatus(id, 'Open');
 /* Closing an account: only when its balance is zero, and after typing its name */

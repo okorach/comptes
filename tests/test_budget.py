@@ -30,6 +30,12 @@ class BudgetTest(unittest.TestCase):
         self.assertFalse([r for r in rows if r[5] == 50.0])
         self.assertEqual(len(list(budget.spread_rows(self.con, "2024-02-15"))), 4)
 
+    def test_default_category_of_the_account_replaces_the_one_of_its_transactions(self):
+        ops.set_default_category(self.con, "Courant", "Maison")
+        self.assertEqual({r[3] for r in budget.spread_rows(self.con, "2024-12-31")}, {"Maison"})
+        ops.set_default_category(self.con, "Courant", None)
+        self.assertIn("Paie", {r[3] for r in budget.spread_rows(self.con, "2024-12-31")})
+
     def test_report_groups(self):
         today = dt.date(2024, 3, 31)
         month = budget.report(self.con, "month", 3, today=today)

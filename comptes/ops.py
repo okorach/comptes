@@ -150,6 +150,12 @@ def set_number_format(con: sqlite3.Connection, decimal: str, thousands: str) -> 
     con.commit()
 
 
+def set_default_category(con: sqlite3.Connection, acc: str, category: str | None) -> None:
+    """Sets the category all the transactions of an account are in (empty: each transaction keeps its own)."""
+    con.execute("UPDATE accounts SET default_category=? WHERE id=?", ((category or "").strip() or None, acc))
+    con.commit()
+
+
 def set_general_category(con: sqlite3.Connection, subcategory: str, category: str) -> None:
     """Maps a category (the sub-category of the transactions) to a general category; an empty general category removes the mapping."""
     sub = (subcategory or "").strip()

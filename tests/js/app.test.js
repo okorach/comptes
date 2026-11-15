@@ -162,6 +162,26 @@ test('the new entry form of an account in a foreign currency has a single amount
   assert.doesNotMatch(html, /f_fxc|f_fxa|Devise d'origine|Montant d'origine|placeholder="auto"/);
 });
 
+test('an account with a default category has no category column nor category field; the category is chosen at the top of the account', async () => {
+  const fixedAccount = {...FX_ACCOUNT, account: {...FX_ACCOUNT.account, default_category: 'Courses'}};
+  const calls = [];
+  const page = (info) => load(async (url, init) => { calls.push({url, method: init?.method, body: init?.body && JSON.parse(init.body)}); return {json: async () => (url.includes('transactions') ? [{...TX, subcategory: 'Loisirs'}] : url.endsWith('/meta') ? {...FX_META, categories: [{subcategory: 'Courses'}, {subcategory: 'Loisirs'}]} : info)}; });
+  const free = page(FX_ACCOUNT);
+  await free.ctx.account('Suisse');
+  assert.deepEqual(heads(free.els['#main'].innerHTML), ['Date', 'Montant €', 'Solde €', 'Montant CHF', 'Solde CHF', 'Description', 'Catégorie']);
+  assert.match(free.els['#main'].innerHTML, /<label>Catégorie<select id="f_sub">/);
+  assert.match(free.els['#main'].innerHTML, /<label>Catégorie par défaut<select id="a_defcat" onchange="setDefaultCategory\('Suisse'\)"><option value=""><\/option><option>Courses<\/option>/);
+  const fixed = page(fixedAccount);
+  await fixed.ctx.account('Suisse');
+  const html = fixed.els['#main'].innerHTML;
+  assert.deepEqual(heads(html), ['Date', 'Montant €', 'Solde €', 'Montant CHF', 'Solde CHF', 'Description']);
+  assert.doesNotMatch(html, /id="f_sub"|<td>Loisirs<\/td>/);
+  assert.match(html, /<option selected>Courses<\/option>/);
+  fixed.mk('#a_defcat').value = '';
+  await fixed.ctx.setDefaultCategory('Suisse');
+  assert.deepEqual(calls.find(c => c.method === 'PUT').body, {default_category: ''});
+});
+
 test('balance and snapshot accounts do not take an original amount', async () => {
   const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? FX_META : {...FX_ACCOUNT, account: {...FX_ACCOUNT.account, mode: 'snapshot'}})}));
   await ctx.account('Suisse');
