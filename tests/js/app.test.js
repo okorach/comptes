@@ -182,6 +182,13 @@ test('an account with a default category has no category column nor category fie
   assert.deepEqual(calls.find(c => c.method === 'PUT').body, {default_category: ''});
 });
 
+test('the date of a transaction never wraps (a nowrap cell), in the account and in the search', async () => {
+  const {ctx, els} = fxPage([TX]);
+  await ctx.account('Suisse');
+  assert.match(els['#main'].innerHTML, /<td class="nw">2024-01-01<\/td>/);
+  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../static/style.css'), 'utf8'), /td\.nw\{white-space:nowrap\}/);
+});
+
 test('balance and snapshot accounts do not take an original amount', async () => {
   const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? FX_META : {...FX_ACCOUNT, account: {...FX_ACCOUNT.account, mode: 'snapshot'}})}));
   await ctx.account('Suisse');
@@ -193,7 +200,7 @@ test('transactions table shows the original amount and currency next to the amou
   await ctx.account('Suisse');
   const html = els['#main'].innerHTML;
   assert.match(html, /Montant CHF[\s\S]*Solde CHF[\s\S]*Montant d'origine[\s\S]*Devise d'origine[\s\S]*Description/);
-  const row = plain(html.match(/<tr id="tx-1"><td>2024-01-01<\/td>.*?<\/tr>/s)[0]);
+  const row = plain(html.match(/<tr id="tx-1"><td class="nw">2024-01-01<\/td>.*?<\/tr>/s)[0]);
   assert.match(row, /-160,00[\s\S]*-160,00[\s\S]*-100,00\s*<\/td><td>USD<\/td><td>US/);
 });
 
@@ -446,7 +453,7 @@ test('the route #/account/<id>/tx/<n> shows the account with transaction n highl
   assert.ok(calls.includes('/api/account/Suisse/transactions'));
   const html = els['#main'].innerHTML;
   assert.match(html, /<tr id="tx-3" class="hl">/);
-  assert.match(html, /<tr id="tx-1"><td>/);
+  assert.match(html, /<tr id="tx-1"><td class="nw">/);
   assert.match(html, /Retour à la recherche/);
   assert.doesNotMatch(html, /Écriture introuvable/);
 });
