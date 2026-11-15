@@ -153,16 +153,13 @@ const FX_META = {categories: [], currencies: ['CHF', 'USD', 'EUR', 'USD']};
 const fxPage = txs => load(async url => ({json: async () => (url.includes('transactions') ? txs : url.endsWith('/meta') ? FX_META : FX_ACCOUNT)}));
 const TX = {id: 1, date: '2024-01-01', amount_main: -80, balance_main: -80, native_amount: -160, native_balance: -160, description: 'US', in_budget: null};
 
-test('account page of a flow account offers an original amount in another currency, without the currency of the account', async () => {
+test('the new entry form of an account in a foreign currency has a single amount, in that currency, no original currency, and no automatic conversion field', async () => {
   const {ctx, els} = fxPage([TX]);
   await ctx.account('Suisse');
   const html = els['#main'].innerHTML;
-  const options = html.match(/id="f_fxc">(.*?)<\/select>/)[1];
-  assert.match(options, /<option>USD<\/option>/);
-  assert.match(options, /<option>EUR<\/option>/);
-  assert.doesNotMatch(options, /CHF/);
-  assert.equal(options.match(/USD/g).length, 1);
-  assert.match(html, /id="f_fxa"/);
+  assert.equal((html.match(/<label>Montant/g) || []).length, 1);
+  assert.match(html, /<label>Montant \(CHF\)<input id="f_amt" size="12"><\/label>/);
+  assert.doesNotMatch(html, /f_fxc|f_fxa|Devise d'origine|Montant d'origine|placeholder="auto"/);
 });
 
 test('balance and snapshot accounts do not take an original amount', async () => {
@@ -186,31 +183,33 @@ test('the original amount columns only appear once a transaction has one', async
   assert.doesNotMatch(els['#main'].innerHTML, /Montant d'origine<\/th>|Montant d'origine <button/);
 });
 
-test('editing a converted transaction leaves the amount empty so that it is converted again', async () => {
+test('editing a transaction shows its amount in the currency of the account, even when it was converted', async () => {
   const {ctx, els} = fxPage([]);
   await ctx.account('Suisse');
-  ctx.editTx({...TX, fx_currency: 'USD', fx_amount: -100, fx_auto: 1});
-  assert.equal(els['#f_amt'].value, '');
-  assert.equal(els['#f_fxc'].value, 'USD');
-  assert.equal(els['#f_fxa'].value, -100);
-  ctx.editTx({...TX, fx_currency: 'USD', fx_amount: -100, fx_auto: 0, native_amount: -165});
+  ctx.editTx({...TX, fx_currency: 'USD', fx_amount: -100, fx_auto: 1, native_amount: -165});
   assert.equal(els['#f_amt'].value, -165);
 });
 
-test('saving sends the original amount and currency', async () => {
+test('saving a new transaction sends no original amount; editing one keeps the original amount it has', async () => {
   const calls = [];
   const {ctx, mk} = load(async (url, init) => {
-    calls.push({url, body: init?.body && JSON.parse(init.body)});
+    calls.push({url, method: init?.method, body: init?.body && JSON.parse(init.body)});
     return {json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? FX_META : FX_ACCOUNT)};
   });
   await ctx.account('Suisse');
   mk('#f_date').value = '2024-03-01';
-  mk('#f_fxc').value = 'USD';
-  mk('#f_fxa').value = '-100';
+  mk('#f_amt').value = '-100';
   await ctx.saveTx('Suisse');
   const post = calls.find(c => c.body && c.body.date === '2024-03-01');
-  assert.equal(post.body.fx_currency, 'USD');
-  assert.equal(post.body.fx_amount, '-100');
+  assert.equal(post.body.native_amount, '-100');
+  assert.equal(post.body.fx_currency, null);
+  assert.equal(post.body.fx_amount, null);
+  ctx.editTx({...TX, id: 7, fx_currency: 'USD', fx_amount: -100, fx_auto: 1, native_amount: -165});
+  mk('#f_date').value = '2024-03-02';
+  await ctx.saveTx('Suisse');
+  const put = calls.find(c => c.method === 'PUT');
+  assert.equal(put.body.fx_currency, 'USD');
+  assert.equal(put.body.fx_amount, -100);
 });
 
 /* ---------------------------------------------------------------- master currency of the application */
@@ -1113,16 +1112,7 @@ test('the new entry form of an account in the currency of the application has a 
   assert.doesNotMatch(html, /f_fxc|f_fxa|Devise d'origine|Montant d'origine/);
 });
 
-test('the form of an account in another currency still has the amount and the original amount', async () => {
-  const {ctx, els} = fxPage([]);
-  await ctx.account('Suisse');
-  const html = els['#main'].innerHTML;
-  assert.match(html, /<label>Montant \(CHF\)<input id="f_amt"[^>]*placeholder="auto"/);
-  assert.match(html, /Devise d'origine/);
-  assert.match(html, /Montant d'origine/);
-});
-
-test('editing a transaction of an account in the application currency keeps its original amount, which the form does not show', async () => {
+test('editing a transaction of an account in the application currency keeps its original amount too', async () => {
   const calls = [];
   const account = {account: {id: 'Courant', type: 'Courant', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []};
   const {ctx, els, mk} = load(async (url, init) => {
@@ -1132,10 +1122,9 @@ test('editing a transaction of an account in the application currency keeps its 
   await settle();
   await ctx.account('Courant');
   mk('#f_date'); mk('#f_amt');
-  ctx.document.querySelector = id => (id === '#f_fxa' || id === '#f_fxc' ? null : mk(id));   // the form has no field for the original amount
   const t = {id: 9, date: '2024-01-01', description: 'US', native_amount: -10, fx_currency: 'USD', fx_amount: -11, fx_auto: 1};
   ctx.editTx(t);
-  assert.equal(els['#f_amt'].value, -10);                  // the converted amount is shown, since the original one is not
+  assert.equal(els['#f_amt'].value, -10);
   await ctx.saveTx('Courant');
   const put = calls.find(c => c.method === 'PUT');
   assert.equal(put.body.fx_currency, 'USD');

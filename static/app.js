@@ -273,20 +273,13 @@ const txColumns = (foreign, cur, hasFx, amounts = true) => [
   {label: 'Description', filter: 'text', value: t => t.description}, {label: 'Sous-cat.', filter: 'checks', value: t => t.subcategory}, {label: '', sort: false, filter: false, clearButton: true, value: () => null},
 ];
 /* Input fields of an entry, depending on the way the balance of the account is kept */
-function modeFields(a, m, cur){
+function modeFields(a, cur){
   if (a.mode === 'snapshot') return `<label>Solde (${cur})<input id="f_bal" size="12"></label>`;
   if (a.mode === 'shares') return '<label>Nb de titres<input id="f_qty" size="10"></label><label>Prix unitaire<input id="f_px" size="10"></label>';
-  // an account in the currency of the application: one amount, in that currency, and no original currency to choose
-  if (a.currency === MASTER) return `<label>Montant (${cur})<input id="f_amt" size="12"></label>`;
-  const title = "Vide : converti depuis le montant d'origine";  // flow and static accounts take transactions in other currencies too
-  return `<label>Montant (${cur})<input id="f_amt" size="12" placeholder="auto" title="${title}"></label>${fxFields(a, m)}`;
+  // one amount, in the currency of the account (its conversion to the currency of the application is computed by the server)
+  return `<label>Montant (${cur})<input id="f_amt" size="12"></label>`;
 }
-/* Optional original amount, for a transaction in a currency other than the one of the account */
-const fxFields = (a, m) => {
-  const opts = [...new Set(m.currencies)].filter(c => c !== a.currency).map(c => `<option>${esc(c)}</option>`).join('');
-  return `<label>Devise d'origine<select id="f_fxc"><option value=""></option>${opts}</select></label><label>Montant d'origine<input id="f_fxa" size="10"></label>`;
-};
-let EDIT = null, EDIT_FX = {};   // EDIT_FX: the original amount of the transaction being edited, kept when the form has no field for it
+let EDIT = null, EDIT_FX = {};   // EDIT_FX: the original amount of the transaction being edited (entered before, or by an import), kept as it is
 async function account(id, msg = '', focus = null){
   FOCUS = focus;
   const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions'), meta()]);
@@ -296,7 +289,7 @@ async function account(id, msg = '', focus = null){
   const bank = a.bank || '';
   const hasFx = tr.some(t => t.fx_currency), duplicates = duplicateIds(tr);
   const subOpts = '<option value=""></option>' + m.categories.map(c => `<option>${esc(c.subcategory)}</option>`).join('');
-  const fields = modeFields(a, m, cur);
+  const fields = modeFields(a, cur);
   const bankOptions = (info.import_formats ?? []).map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('');
   // the format of the file follows the bank of the account; the selector is only for a bank whose export we cannot read
   const formatSelect = info.import_format || !bankOptions ? '' : `<select id="imp_bank" title="Format du fichier">${bankOptions}</select>`;
@@ -317,12 +310,11 @@ async function account(id, msg = '', focus = null){
   EDIT = null;
   $('#tx-' + focus)?.scrollIntoView?.({block: 'center'});
 }
-function resetForm(){ EDIT = null; $('#form_title').textContent = 'Nouvelle écriture'; ['f_amt', 'f_bal', 'f_qty', 'f_px', 'f_desc', 'f_bud', 'f_fxc', 'f_fxa'].forEach(i => { if ($('#' + i)) $('#' + i).value = ''; }); }
+function resetForm(){ EDIT = null; $('#form_title').textContent = 'Nouvelle écriture'; ['f_amt', 'f_bal', 'f_qty', 'f_px', 'f_desc', 'f_bud'].forEach(i => { if ($('#' + i)) $('#' + i).value = ''; }); }
 function editTx(t){
   EDIT = t.id; EDIT_FX = {fx_currency: t.fx_currency, fx_amount: t.fx_amount}; $('#form_title').textContent = 'Modifier l\'écriture #' + t.id;
   $('#f_date').value = t.date; $('#f_desc').value = t.description || ''; $('#f_sub').value = t.subcategory || '';
-  if ($('#f_amt')) $('#f_amt').value = t.fx_auto && $('#f_fxa') ? '' : t.native_amount ?? '';  // a converted amount is recomputed, not entered
-  if ($('#f_fxa')) { $('#f_fxc').value = t.fx_currency ?? ''; $('#f_fxa').value = t.fx_amount ?? ''; }
+  if ($('#f_amt')) $('#f_amt').value = t.native_amount ?? '';  // a converted amount is recomputed, not entered
   if ($('#f_bal')) $('#f_bal').value = t.native_balance ?? '';
   if ($('#f_qty')) { $('#f_qty').value = t.qty ?? ''; $('#f_px').value = t.price ?? ''; }
   if ($('#f_bud')) $('#f_bud').value = t.in_budget ?? '';
@@ -330,7 +322,7 @@ function editTx(t){
 }
 async function saveTx(id){
   const g = i => $('#' + i) ? $('#' + i).value : null;
-  const body = {date: g('f_date'), description: g('f_desc'), subcategory: g('f_sub'), native_amount: g('f_amt'), native_balance: g('f_bal'), qty: g('f_qty'), price: g('f_px'), in_budget: g('f_bud'), fx_currency: g('f_fxc') ?? (EDIT ? EDIT_FX.fx_currency : null), fx_amount: g('f_fxa') ?? (EDIT ? EDIT_FX.fx_amount : null)};
+  const body = {date: g('f_date'), description: g('f_desc'), subcategory: g('f_sub'), native_amount: g('f_amt'), native_balance: g('f_bal'), qty: g('f_qty'), price: g('f_px'), in_budget: g('f_bud'), fx_currency: EDIT ? EDIT_FX.fx_currency : null, fx_amount: EDIT ? EDIT_FX.fx_amount : null};   // the original amount of an existing transaction is kept
   try {
     if (!body.date) throw new Error('Date requise');
     if (EDIT) await api('transaction/' + EDIT, 'PUT', body); else await api('account/' + enc(id) + '/transactions', 'POST', body);
