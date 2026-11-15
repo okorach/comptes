@@ -225,7 +225,7 @@ function txRow(t, foreign, aid, hasFx = false, amounts = true, duplicates = new 
   const edit = `editTx(${esc(JSON.stringify(t))})`, del = `delTx(${Number(t.id)},'${jsq(aid)}')`;
   const budget = t.in_budget ? ` <span class="mut">(${esc(t.in_budget)})</span>` : '';
   const categoryCell = category ? '<td>' + esc(t.subcategory) + budget + '</td>' : '';
-  return `<tr id="tx-${Number(t.id)}"${t.id === FOCUS ? ' class="hl"' : ''}><td>${esc(t.date)}</td>${amount}<td class="n">${num(t.balance_main)}</td>${native}${origin}<td>${esc(t.description)}</td>${categoryCell}
+  return `<tr id="tx-${Number(t.id)}"${t.id === FOCUS ? ' class="hl"' : ''}><td class="nw">${esc(t.date)}</td>${amount}<td class="n">${num(t.balance_main)}</td>${native}${origin}<td>${esc(t.description)}</td>${categoryCell}
   <td class="s actions">${iconButton('pen', 'Modifier', edit)}${iconButton('trash', 'Supprimer', del)}</td></tr>`;
 }
 const NATIVE_KEY = {y1: 'n1', y3: 'n3', y5: 'n5', y8: 'n8', y_all: 'n_all'};
@@ -379,7 +379,7 @@ function searchRow(foreign, hasFx){
     const inAccount = t.currency === MASTER ? '' : num(t.native_amount, sym(t.currency));
     const own = foreign ? `<td class="n mut">${inAccount}</td>` : '';
     const origin = hasFx ? `<td class="n mut">${num(t.fx_amount, '')}</td><td>${esc(t.fx_currency)}</td>` : '';
-    return `<tr class="click" onclick="location.hash='${searchLink(t)}'"><td>${esc(t.date)}</td><td>${esc(t.account)}</td><td class="n ${cls(t.amount_main)}">${num(t.amount_main)}</td>${own}${origin}`
+    return `<tr class="click" onclick="location.hash='${searchLink(t)}'"><td class="nw">${esc(t.date)}</td><td>${esc(t.account)}</td><td class="n ${cls(t.amount_main)}">${num(t.amount_main)}</td>${own}${origin}`
       + `<td>${esc(t.description)}</td><td>${esc(t.category)}</td><td>${esc(t.subcategory)}</td><td><a href="${searchLink(t)}">voir</a></td></tr>`;
   };
 }
