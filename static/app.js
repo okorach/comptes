@@ -437,6 +437,7 @@ async function importPreview(id){
 async function importCommit(id){ const r = await api('account/' + enc(id) + '/import', 'POST', {...IMPORT, commit: true}); await account(id, `${r.new.length} écritures importées`); }
 
 /* ------------------------------------------------------------------ admin */
+const FX_REFRESH_HELP = "Un taux par semaine (taux de référence de la BCE, via frankfurter.dev), depuis la plus ancienne donnée de chaque devise. Les semaines qui ont déjà un taux ne sont pas modifiées. Mise à jour automatique au démarrage de l'application si Internet est disponible ; les soldes sont alors recalculés.";
 async function admin(msg = ''){
   const m = await meta(), f = m.number_format ?? NUMBER_FORMAT;
   $('#main').innerHTML = `<h2>Administration</h2><div class="ok">${esc(msg)}</div>
@@ -449,21 +450,21 @@ async function admin(msg = ''){
   <label style="flex-direction:row;align-items:center"><input type="checkbox" id="n_bud"> en budget</label>
   <button class="primary" onclick="createAcc()">Créer</button></div><div id="n_err" class="err"></div>
   <div class="mut" style="font-size:12px">Compte de type « Courant » : saisie des montants (solde cumulé). Autres types : saisie du solde (le montant est la différence). Pour des titres cotés, créez le compte puis choisissez le mode « shares » dans la base si besoin.</div></div>
+  <div class="admin-pair">
   <div class="card"><b>Devise principale</b> <span class="mut">(totaux, soldes et rendements de tous les comptes)</span><div class="row">
   <label>Devise<select id="m_cur">${[...new Set(m.currencies)].map(c => `<option ${c === m.master_currency ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
-  <button onclick="setMaster()">Appliquer</button></div><div id="m_err" class="err"></div>
-  <div class="mut" style="font-size:12px">Tous les montants, soldes et rendements sont recalculés ; la devise doit avoir des taux de change (l'euro n'en a pas besoin).</div></div>
+  <button onclick="setMaster()">Appliquer</button></div><div id="m_err" class="err"></div></div>
+  <div class="card"><b>Taux de change</b> <span class="mut">(unités de devise pour 1 € ; l'euro sert de pivot)</span><div class="row">
+  <label>Devise<select id="x_cur" onchange="fxList()">${m.currencies.filter(c => c !== 'EUR').map(c => `<option>${c}</option>`).join('')}</select></label>
+  <label>Date<input type="date" id="x_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Taux<input id="x_rate" size="8"></label><button onclick="addFx()">Ajouter</button>
+  <span class="vsep"></span><button onclick="refreshRates()" title="${esc(FX_REFRESH_HELP)}">Mettre à jour depuis Internet</button><span id="fx_status" class="mut"></span></div>
+  <details class="fx-details"><summary>Taux enregistrés</summary><div id="fxl"></div></details></div>
+  </div>
   <div class="card"><b>Format des nombres</b> <span class="mut">(tous les montants et pourcentages de l'application)</span><div class="row">
   <label>Séparateur décimal<select id="nf_dec" onchange="numberFormatPreview()"><option value="."${f.decimal === '.' ? ' selected' : ''}>point ( . )</option><option value=","${f.decimal === ',' ? ' selected' : ''}>virgule ( , )</option></select></label>
   <label>Séparateur des milliers<input id="nf_th" size="3" value="${esc(f.thousands)}" placeholder="aucun" autocomplete="off" oninput="numberFormatPreview()"></label>
   <span class="mut">Aperçu : <b class="d" id="nf_preview"></b></span><button onclick="setNumberFormatting()">Appliquer</button></div><div id="nf_err" class="err"></div>
   <div class="mut" style="font-size:12px">Séparateur des milliers : laisser vide pour aucun, ou saisir un seul caractère (espace, apostrophe, point, virgule…), différent du séparateur décimal.</div></div>
-  <div class="card"><b>Taux de change</b> <span class="mut">(unités de devise pour 1 € ; l'euro sert de pivot)</span><div class="row">
-  <label>Devise<select id="x_cur" onchange="fxList()">${m.currencies.filter(c => c !== 'EUR').map(c => `<option>${c}</option>`).join('')}</select></label>
-  <label>Date<input type="date" id="x_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Taux<input id="x_rate" size="8"></label><button onclick="addFx()">Ajouter</button></div>
-  <div class="row"><button onclick="refreshRates()">Mettre à jour depuis Internet</button><span id="fx_status" class="mut"></span></div>
-  <div class="mut" style="font-size:12px">Un taux par semaine (taux de référence de la BCE, via frankfurter.dev), depuis la plus ancienne donnée de chaque devise. Les semaines qui ont déjà un taux ne sont pas modifiées. Mise à jour automatique au démarrage de l'application si Internet est disponible ; les soldes sont alors recalculés.</div>
-  <div id="fxl"></div></div>
   <div class="card"><b>Catégories</b> <span class="mut">(catégorie générale de chaque catégorie)</span><div id="cat_err" class="err"></div><div id="catmap"></div>
   <div class="mut" style="font-size:12px">Une catégorie générale vide : la catégorie n'a pas de catégorie générale (« (sans catégorie) » dans les dépenses). La modification est enregistrée en quittant le champ.</div></div>`;
   numberFormatPreview();
