@@ -327,7 +327,9 @@ function editTx(t){
 }
 async function saveTx(id){
   const g = i => $('#' + i) ? $('#' + i).value : null;
-  const body = {date: g('f_date'), description: g('f_desc'), subcategory: $('#f_sub') ? g('f_sub') : (EDIT ? EDIT_SUB : null), native_amount: g('f_amt'), native_balance: g('f_bal'), qty: g('f_qty'), price: g('f_px'), in_budget: g('f_bud'), fx_currency: EDIT ? EDIT_FX.fx_currency : null, fx_amount: EDIT ? EDIT_FX.fx_amount : null};   // the original amount of an existing transaction is kept
+  const kept = EDIT ? EDIT_SUB : null;   // without the field (default category of the account), the own category of the transaction is kept
+  const subcategory = $('#f_sub') ? g('f_sub') : kept;
+  const body = {date: g('f_date'), description: g('f_desc'), subcategory, native_amount: g('f_amt'), native_balance: g('f_bal'), qty: g('f_qty'), price: g('f_px'), in_budget: g('f_bud'), fx_currency: EDIT ? EDIT_FX.fx_currency : null, fx_amount: EDIT ? EDIT_FX.fx_amount : null};   // the original amount of an existing transaction is kept
   try {
     if (!body.date) throw new Error('Date requise');
     if (EDIT) await api('transaction/' + EDIT, 'PUT', body); else await api('account/' + enc(id) + '/transactions', 'POST', body);
