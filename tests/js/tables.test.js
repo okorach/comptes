@@ -155,11 +155,11 @@ test('a date or amount filter opens a pop-up form with a min and a max; there is
   env.ctx.tableOpenFilter(env.id, 0, null);
   const pop = env.els['#filter-pop'];
   assert.equal(pop.hidden, false);
-  assert.match(pop.innerHTML, /Min<input id="fp-min" type="date"/);
-  assert.match(pop.innerHTML, /Max<input id="fp-max" type="date"/);
-  assert.doesNotMatch(pop.innerHTML, /<select/);                                           // no choice of condition
+  assert.match(pop.innerHTML, /Entre <input id="fp-min" type="date"[^>]*> Et <input id="fp-max" type="date"/);
+  assert.match(pop.innerHTML, /class="fp-cancel"[^>]*>✕<\/button><button type="submit" class="fp-ok"[^>]*>✓<\/button>/);   // grey cross, green tick
+  assert.doesNotMatch(pop.innerHTML, /<select|Bornes incluses|<b>/);                       // no choice of condition, no comment
   env.ctx.tableOpenFilter(env.id, 1, null);
-  assert.match(pop.innerHTML, /Min<input id="fp-min" type="text"/);
+  assert.match(pop.innerHTML, /Entre <input id="fp-min" type="text"/);
   env.ctx.tableOpenFilter(env.id, 1, null);                                                // the same button again closes it
   assert.equal(pop.hidden, true);
 });

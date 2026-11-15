@@ -158,12 +158,12 @@ function tableSetFilter(id, i, f){
 }
 
 function tableRangeForm(id, i, col, f){
-  const type = col.input === 'date' ? 'type="date"' : 'type="text" inputmode="decimal" size="10"', cur = f ?? {};
-  const field = (name, label, v) => `<label>${label}<input id="fp-${name}" ${type} value="${esc(v ?? '')}"></label>`;
-  return `<form onsubmit="tableApplyRange(${id},${i});return false"><b>${esc(col.label)}</b>
-    <div class="fp-values">${field('min', 'Min', cur.min)}${field('max', 'Max', cur.max)}</div>
-    <div class="mut">Bornes incluses ; une borne vide : pas de limite.</div><div id="fp-err" class="err"></div>
-    <div class="fp-buttons"><button type="submit" class="primary">Appliquer</button><button type="button" onclick="tableClearFilter(${id},${i})">Effacer</button></div></form>`;
+  const type = col.input === 'date' ? 'type="date"' : 'type="text" inputmode="decimal" size="8"', cur = f ?? {};
+  const field = (name, label, v) => `<input id="fp-${name}" ${type} value="${esc(v ?? '')}" aria-label="${label}" title="${label}">`;
+  return `<form onsubmit="tableApplyRange(${id},${i});return false" aria-label="Filtrer ${esc(col.label)}">
+    <div class="fp-values">Entre ${field('min', 'Min', cur.min)} Et ${field('max', 'Max', cur.max)}
+    <button type="button" class="fp-cancel" title="Annuler" aria-label="Annuler" onclick="tableClosePopup()">✕</button><button type="submit" class="fp-ok" title="Appliquer" aria-label="Appliquer">✓</button></div>
+    <div id="fp-err" class="err"></div></form>`;
 }
 
 function tableChecksForm(id, i, col, f){
@@ -180,7 +180,7 @@ function tableOpenFilter(id, i, button){
   pop.innerHTML = col.filter === 'checks' ? tableChecksForm(id, i, col, t.filters[i]) : tableRangeForm(id, i, col, t.filters[i]);
   filterPop = {id, i};
   const box = button?.getBoundingClientRect?.();
-  if (box) { pop.style.top = box.bottom + 4 + 'px'; pop.style.left = Math.max(8, Math.min(box.left, window.innerWidth - 300)) + 'px'; }
+  if (box) { pop.style.top = box.bottom + 4 + 'px'; pop.style.left = Math.max(8, Math.min(box.left, window.innerWidth - 480)) + 'px'; }
   pop.hidden = false;
 }
 
