@@ -465,7 +465,8 @@ async function admin(msg = ''){
 async function categoryMapping(){
   const rows = await api('categories'), generals = [...new Set(rows.map(r => r.category).filter(Boolean))].toSorted(tableCompare);
   const line = r => `<tr><td>${esc(r.subcategory)}</td><td><input class="cat-general" list="generals" size="24" value="${esc(r.category ?? '')}" data-sub="${esc(r.subcategory)}" aria-label="Catégorie générale de ${esc(r.subcategory)}" onchange="saveGeneralCategory(this)"></td></tr>`;
-  $('#catmap').innerHTML = `<datalist id="generals">${generals.map(g => `<option>${esc(g)}</option>`).join('')}</datalist>
+  const options = generals.map(g => '<option>' + esc(g) + '</option>').join('');
+  $('#catmap').innerHTML = `<datalist id="generals">${options}</datalist>
     <table><tr><th>Catégorie</th><th>Catégorie générale</th></tr>${rows.map(line).join('')}</table>`;
 }
 async function saveGeneralCategory(input){
