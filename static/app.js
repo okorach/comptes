@@ -93,7 +93,7 @@ async function home(){
 }
 /* The patrimoine chart has the default height; a button shows it 50 % taller (420 instead of 280) until the next navigation */
 let NETWORTH_TALL = false;
-function toggleNetworthHeight(){ NETWORTH_TALL = !NETWORTH_TALL; home(); }
+function toggleNetworthHeight(){ NETWORTH_TALL = !NETWORTH_TALL; return home(); }
 const homeColumns = () => [
   {label: 'Compte', filter: false, value: a => a.id}, {label: 'Solde ' + sym(MASTER), num: true, filter: false, value: a => a.balance_main},
   {label: 'Solde (devise)', num: true, filter: false, value: a => a.currency === MASTER ? null : a.balance_native}, {label: 'Type', value: a => a.type}, {label: 'Banque', value: a => a.bank},
