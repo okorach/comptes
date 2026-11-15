@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS transactions(
   native_amount REAL, native_balance REAL,  -- amounts in the currency of the account
   description TEXT, subcategory TEXT, in_budget REAL, qty REAL, price REAL,
   fx_currency TEXT, fx_amount REAL,         -- original amount, when the transaction is in a currency other than the one of the account
-  fx_auto INTEGER DEFAULT 0                 -- 1: native_amount is converted from fx_amount, 0: it was entered
+  fx_auto INTEGER DEFAULT 0,                -- 1: native_amount is converted from fx_amount, 0: it was entered
+  not_duplicate INTEGER DEFAULT 0           -- 1: the user said it is not a duplicate of a transaction with the same date, amount and description
 );
 CREATE INDEX IF NOT EXISTS ix_tr_acc ON transactions(account, date);
 CREATE TABLE IF NOT EXISTS deposits(
@@ -39,7 +40,8 @@ NATIVE_INTEREST_COLUMNS = ("n1", "n3", "n5", "n8", "n_all")
 # Columns introduced after the first version of the database: table -> {column: definition}
 ADDED_COLUMNS = {
     "interests": dict.fromkeys(NATIVE_INTEREST_COLUMNS, "REAL"),
-    "transactions": {"fx_currency": "TEXT", "fx_amount": "REAL", "fx_auto": "INTEGER DEFAULT 0"},
+    "transactions": {"fx_currency": "TEXT", "fx_amount": "REAL", "fx_auto": "INTEGER DEFAULT 0",
+                     "not_duplicate": "INTEGER DEFAULT 0"},
 }
 
 

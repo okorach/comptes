@@ -114,6 +114,8 @@ class Handler(BaseHTTPRequestHandler):
             tid = int(parts[1])
             if m == "PUT": return {"ok": ops.update_transaction(con, tid, self._body())}
             if m == "DELETE": return {"ok": ops.delete_transaction(con, tid)}
+        if parts[0] == "transaction" and len(parts) == 3 and parts[2] == "not_duplicate" and m == "POST":
+            return {"ok": ops.set_not_duplicate(con, int(parts[1]))}
         if parts[0] == "deposit" and len(parts) == 2 and m == "DELETE":
             ops.delete_deposit(con, int(parts[1])); return {"ok": True}
         if parts[0] == "account" and len(parts) >= 2:
@@ -136,7 +138,7 @@ class Handler(BaseHTTPRequestHandler):
                 limit = int(q["limit"]) if q.get("limit") else -1   # all the transactions unless a limit is asked (-1: no limit in SQLite)
                 rows = con.execute(
                     "SELECT id,date,amount_main,balance_main,native_amount,native_balance,description,subcategory,in_budget,qty,price,"
-                    "fx_currency,fx_amount,fx_auto "
+                    "fx_currency,fx_amount,fx_auto,not_duplicate "
                     "FROM transactions WHERE account=? ORDER BY date DESC, id DESC LIMIT ?",
                     (acc, limit)).fetchall()
                 return [dict(r) for r in rows]

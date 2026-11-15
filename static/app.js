@@ -195,21 +195,30 @@ let FOCUS = null;  // transaction to show (highlighted) in the account page: the
 /* Accounts whose transactions are shown without the « Montant » columns (the balance is what matters, the amounts are the movements of the market) */
 const NO_AMOUNT_TYPES = new Set(['Assurance Vie', 'PER', 'PERCO', 'PEA', 'Actions', 'PEE', 'Investment']);
 const showsAmount = a => !NO_AMOUNT_TYPES.has(a.type);
-/* Ids of the transactions that have the same date, the same amount and the same description as another one of the list */
+/* Ids of the transactions that have the same date, the same amount and the same description as another one of the list
+   (the ones the user acknowledged as "not a duplicate" are left out) */
 function duplicateIds(transactions){
   const groups = new Map();
   for (const t of transactions) {
-    if (t.native_amount === null || t.native_amount === undefined) continue;
+    if (t.native_amount === null || t.native_amount === undefined || t.not_duplicate) continue;
     const key = JSON.stringify([t.date, Math.round(t.native_amount * 100), (t.description ?? '').trim()]);
     groups.set(key, [...(groups.get(key) ?? []), t.id]);
   }
   return new Set([...groups.values()].filter(ids => ids.length > 1).flat());
 }
-const DUPLICATE_TEXT = 'Transaction potentiellement dupliquée';
+const DUPLICATE_TEXT = 'Transaction potentiellement doublon';
+/* Orange bullet; hovering (or focusing) it shows the text and a button to say that it is not a duplicate */
+const duplicateBubble = (t, aid) => `<span class="dup" tabindex="0"><span class="stale-dot warn" role="img" aria-label="${DUPLICATE_TEXT}"></span><span class="dup-pop">${DUPLICATE_TEXT}<button onclick="notDuplicate(${Number(t.id)},'${jsq(aid)}')">Pas un doublon</button></span></span>`;
+async function notDuplicate(tid, aid){
+  const y = window.scrollY;
+  await api('transaction/' + tid + '/not_duplicate', 'POST', {});
+  await account(aid);
+  window.scrollTo?.(0, y);   // stay where we were in the list
+}
 function txRow(t, foreign, aid, hasFx = false, amounts = true, duplicates = new Set()){
   const nativeAmount = foreign && amounts ? `<td class="n mut">${num(t.native_amount, '')}</td>` : '';
   const native = foreign ? nativeAmount + `<td class="n mut">${num(t.native_balance, '')}</td>` : '';
-  const flag = duplicates.has(t.id) ? bubble(true, DUPLICATE_TEXT) : '';   // orange bullet left of the amount
+  const flag = duplicates.has(t.id) ? duplicateBubble(t, aid) : '';   // orange bullet left of the amount
   const amount = amounts ? `<td class="n ${cls(t.amount_main)}">${flag}${num(t.amount_main)}</td>` : '';
   const origin = hasFx ? `<td class="n mut">${num(t.fx_amount, '')}</td><td>${esc(t.fx_currency)}</td>` : '';
   const edit = `editTx(${esc(JSON.stringify(t))})`, del = `delTx(${Number(t.id)},'${jsq(aid)}')`;

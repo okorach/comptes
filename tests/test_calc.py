@@ -52,6 +52,16 @@ class CalcTest(unittest.TestCase):
         self.assertFalse(ops.delete_transaction(self.con, tid))
         self.assertFalse(ops.update_transaction(self.con, tid, {"date": "2024-01-02"}))
 
+    def test_not_duplicate_flag(self):
+        tid = ops.add_transaction(self.con, "Courant", {"date": "2024-01-01", "native_amount": "10", "description": "A"})
+        flag = lambda: self.con.execute("SELECT not_duplicate FROM transactions WHERE id=?", (tid,)).fetchone()[0]
+        self.assertEqual(flag(), 0)
+        self.assertTrue(ops.set_not_duplicate(self.con, tid))
+        self.assertEqual(flag(), 1)
+        ops.update_transaction(self.con, tid, {"date": "2024-01-01", "native_amount": "10", "description": "A"})
+        self.assertEqual(flag(), 0)                       # an edited transaction is not the one that was acknowledged
+        self.assertFalse(ops.set_not_duplicate(self.con, 9999))
+
     def test_summaries_and_net_worth(self):
         ops.add_transaction(self.con, "Courant", {"date": "2024-01-10", "native_amount": "500"})
         ops.add_transaction(self.con, "Suisse", {"date": "2024-01-20", "native_amount": "200"})
