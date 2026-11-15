@@ -28,6 +28,7 @@ tr.hl td{background:rgba(255,190,0,.28)}
 .modal h2{margin:2px 0 6px;font-size:17px} .modal p{margin:0;color:var(--mut);line-height:1.5}
 .modal-name{margin-top:10px;padding:6px 10px;border-radius:6px;background:var(--card);border:1px solid var(--line);font-size:15px;font-weight:600;overflow-wrap:anywhere}
 .modal input{width:100%;margin-top:10px}
+.modal-icon.info{background:rgba(37,99,235,.12);color:var(--acc)} .modal-field{display:flex;flex-direction:column;gap:4px;margin-top:12px;color:var(--mut);font-size:13px} .modal-field input,.modal-field select{width:100%;margin-top:0;color:var(--fg)}
 .modal-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:22px}
 button.danger{background:var(--neg);border-color:var(--neg);color:#fff} button.danger:hover:not(:disabled){filter:brightness(.92)}
 button:disabled{opacity:.45;cursor:not-allowed}
