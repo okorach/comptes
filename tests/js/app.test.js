@@ -325,6 +325,18 @@ test('administration page: a table gives the general category of each category, 
   assert.match(els['#catmap'].innerHTML, /value="Divers"/);   // the table is read again
 });
 
+test('administration page: the master currency and the exchange rates are side by side, the Internet update is on the form line with its explanation as a tooltip, the rates are collapsed', async () => {
+  const {ctx, els} = load(async url => ({json: async () => (url.endsWith('/meta') ? {categories: [], types: [], banks: [], currencies: ['CHF', 'EUR'], master_currency: 'EUR'} : [])}));
+  await settle();
+  await ctx.admin();
+  const html = els['#main'].innerHTML;
+  assert.match(html, /<div class="admin-pair">\s*<div class="card"><b>Devise principale<\/b>[\s\S]*<div class="card"><b>Taux de change<\/b>[\s\S]*<\/details><\/div>\s*<\/div>\s*<div class="card"><b>Format des nombres/);
+  assert.match(html, /onclick="addFx\(\)">Ajouter<\/button>\s*<span class="vsep"><\/span><button onclick="refreshRates\(\)" title="Un taux par semaine/);
+  assert.doesNotMatch(html, /<div class="mut"[^>]*>(Un taux par semaine|Tous les montants, soldes)/);   // no visible explanations
+  assert.match(html, /<details class="fx-details"><summary>Taux enregistrés<\/summary><div id="fxl">/);
+  assert.doesNotMatch(html, /<details class="fx-details" open/);
+});
+
 test('administration page shows the refusal of an unknown master currency', async () => {
   const {ctx, els, mk} = load(async url => ({json: async () => (url.endsWith('/meta') ? {categories: [], types: [], banks: [], currencies: ['EUR'], master_currency: 'EUR'} : url.endsWith('master_currency') ? {error: 'no FX rates for JPY'} : [])}));
   await settle();
