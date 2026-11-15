@@ -1035,3 +1035,24 @@ test('the patrimoine chart has the default height, and a button shows it 50 % ta
   await ctx.route();                                    // navigating resets it
   assert.match(els['#main'].innerHTML, /<svg viewBox="0 0 1000 280"/);
 });
+
+test('duplicateIds finds the transactions with the same date, amount and description', () => {
+  const {get} = load(), dup = get('duplicateIds');
+  const t = (id, date, amount, description) => ({id, date, native_amount: amount, description});
+  const ids = dup([t(1, '2024-01-01', -10, 'Café'), t(2, '2024-01-01', -10, 'Café'), t(3, '2024-01-02', -10, 'Café'), t(4, '2024-01-01', -11, 'Café'),
+    t(5, '2024-01-01', -10, 'Thé'), t(6, '2024-01-05', 5, 'x'), t(7, '2024-01-05', 5, ' x '), t(8, '2024-01-06', null, 'y'), t(9, '2024-01-06', null, 'y'),
+    t(10, '2024-02-01', 0.1 + 0.2, 'z'), t(11, '2024-02-01', 0.3, 'z'), t(12, '2024-01-07', 1, 'a'), t(13, '2024-01-07', 1, 'a'), t(14, '2024-01-07', 1, 'a')]);
+  assert.deepEqual([...ids].sort((a, b) => a - b), [1, 2, 6, 7, 10, 11, 12, 13, 14]);   // not the ones without amount; 3 of a kind all flagged
+});
+
+test('both rows of a potential duplicate get an orange bullet with a tooltip, left of the amount; the others do not', async () => {
+  const tx = (id, desc) => ({id, date: '2024-01-01', amount_main: -5, native_amount: -5, balance_main: 0, description: desc, in_budget: null});
+  const account = {account: {id: 'X', type: 'Courant', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []};
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [tx(1, 'Café'), tx(2, 'Café'), tx(3, 'Thé')] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR']} : account)}));
+  await settle();
+  await ctx.account('X');
+  const html = els['#main'].innerHTML;
+  const bullet = /<td class="n neg"><span class="stale-dot warn" role="img" title="Transaction potentiellement dupliquée"[^>]*><\/span>-5,00 €<\/td>/g;
+  assert.equal(html.match(bullet).length, 2);
+  assert.equal((html.match(/stale-dot/g) || []).length, 2);
+});
