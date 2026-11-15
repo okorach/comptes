@@ -137,6 +137,7 @@ class Handler(BaseHTTPRequestHandler):
                 if m == "PUT":
                     d = self._body()
                     if "status" in d: ops.set_status(con, acc, d["status"])
+                    if "default_category" in d: ops.set_default_category(con, acc, d["default_category"])
                     return {"ok": True}
                 dep = con.execute("SELECT * FROM deposits WHERE account=? ORDER BY date DESC", (acc,)).fetchall()
                 it = con.execute("SELECT * FROM interests WHERE account=?", (acc,)).fetchone()

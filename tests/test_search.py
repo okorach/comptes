@@ -18,6 +18,16 @@ class SearchTest(UsdDatabaseCase):
     def ids(self, **criteria):
         return [r["description"] for r in search.run(self.con, criteria)["rows"]]
 
+    def test_default_category_of_the_account_applies_to_all_its_transactions(self):
+        ops.set_default_category(self.con, "Suisse", "Voyages")
+        rows = {r["description"]: r["subcategory"] for r in search.run(self.con, {})["rows"]}
+        self.assertEqual(rows["Virement"], "Voyages")
+        self.assertEqual(rows["Cinéma"], "Loisirs")                      # the other accounts are as they were
+        self.assertEqual(self.ids(subcategory="Voyages"), ["Virement"])
+        self.assertEqual(self.ids(text="voyages"), ["Virement"])
+        ops.set_default_category(self.con, "Suisse", "")                 # empty: no default category any more
+        self.assertEqual(self.ids(subcategory="Voyages"), [])
+
     def test_no_criteria_lists_everything_most_recent_first(self):
         result = search.run(self.con, {})
         self.assertEqual((result["total"], result["truncated"]), (5, False))

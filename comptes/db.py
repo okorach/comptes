@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS interests(
 NATIVE_INTEREST_COLUMNS = ("n1", "n3", "n5", "n8", "n_all")
 # Columns introduced after the first version of the database: table -> {column: definition}
 ADDED_COLUMNS = {
+    "accounts": {"default_category": "TEXT"},   # when set, every transaction of the account is in this category
     "interests": dict.fromkeys(NATIVE_INTEREST_COLUMNS, "REAL"),
     "transactions": {"fx_currency": "TEXT", "fx_amount": "REAL", "fx_auto": "INTEGER DEFAULT 0",
                      "not_duplicate": "INTEGER DEFAULT 0"},

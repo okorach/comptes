@@ -6,6 +6,8 @@ import unicodedata
 MAX_ROWS = 2000
 DEFAULT_ROWS = 500
 CENT = 0.005  # amounts are stored as floats: bounds are widened by half a cent so that "12.50" finds 12.4999999
+# the category of a transaction: the default one of its account when it has one
+CATEGORY = "COALESCE(NULLIF(a.default_category,''),t.subcategory)"
 AMOUNTS = ("t.amount_main", "t.native_amount", "t.fx_amount")  # the amount may be remembered in any of the currencies
 
 
@@ -67,7 +69,7 @@ def _conditions(q: dict) -> tuple[list[str], list]:
     """WHERE clauses (all to be satisfied) and their parameters for the criteria of the search"""
     where: list[str] = []
     args: list = []
-    for key, clause in (("account", "t.account=?"), ("category", "c.category=?"), ("subcategory", "t.subcategory=?")):
+    for key, clause in (("account", "t.account=?"), ("category", "c.category=?"), ("subcategory", f"{CATEGORY}=?")):
         if q.get(key):
             where.append(clause)
             args.append(q[key])
@@ -83,7 +85,7 @@ def _conditions(q: dict) -> tuple[list[str], list]:
         where.append(amounts[0])
         args.extend(amounts[1])
     for word in fold(q.get("text")).split():
-        where.append("instr(fold(coalesce(t.description,'') || ' ' || coalesce(t.subcategory,'')),?)>0")
+        where.append(f"instr(fold(coalesce(t.description,'') || ' ' || coalesce({CATEGORY},'')),?)>0")
         args.append(word)
     return where, args
 
@@ -96,10 +98,10 @@ def run(con: sqlite3.Connection, q: dict) -> dict:
     limit = _limit(q)
     where, args = _conditions(q)
     con.create_function("fold", 1, fold, deterministic=True)
-    source = "FROM transactions t JOIN accounts a ON a.id=t.account LEFT JOIN categories c ON c.subcategory=t.subcategory"
+    source = f"FROM transactions t JOIN accounts a ON a.id=t.account LEFT JOIN categories c ON c.subcategory={CATEGORY}"
     clause = (" WHERE " + " AND ".join(where)) if where else ""
     total = con.execute(f"SELECT COUNT(*) {source}{clause}", args).fetchone()[0]
     rows = con.execute(
-        "SELECT t.id,t.account,t.date,t.amount_main,t.native_amount,a.currency,t.fx_currency,t.fx_amount,t.description,t.subcategory,c.category "
+        f"SELECT t.id,t.account,t.date,t.amount_main,t.native_amount,a.currency,t.fx_currency,t.fx_amount,t.description,{CATEGORY} AS subcategory,c.category "
         f"{source}{clause} ORDER BY t.date DESC, t.id DESC LIMIT ?", [*args, limit]).fetchall()
     return {"rows": [dict(r) for r in rows], "total": total, "truncated": total > len(rows)}
