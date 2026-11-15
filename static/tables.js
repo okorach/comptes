@@ -117,7 +117,10 @@ function tableFilterSummary(col, f){
 
 function tableFilterCell(id, col, i){
   // the icon that removes all the filters, in the filter row, in the column of the buttons of the rows (hidden while there is no filter)
-  if (col.clearButton) return `<th class="s actions">${iconButton('filterOff', 'Supprimer les filtres', `tableClearFilters(${id})`, `id="tclr-${id}" hidden`)}</th>`;
+  if (col.clearButton) {
+    const icon = iconButton('filterOff', 'Supprimer les filtres', 'tableClearFilters(' + id + ')', 'id="tclr-' + id + '" hidden');
+    return '<th class="s actions">' + icon + '</th>';
+  }
   if (col.filter === false) return '<th></th>';
   const cell = col.num ? '<th class="n">' : '<th>';  // the filter of a numeric column sits under its right-aligned header
   const label = `aria-label="Filtrer ${esc(col.label)}"`;
