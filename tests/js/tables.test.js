@@ -262,3 +262,22 @@ test('the transactions of an account have these filters: no balance filter, a ra
   const html = els['#main'].innerHTML;
   assert.equal((html.match(/class="fbtn"/g) || []).length, 3);   // date, amount, sub-category
 });
+
+test('a button clears all the filters of the table (and empties the controls of the header); it is only shown when a filter is active', () => {
+  const env = setup(TXCOLS, TX);
+  const clear = () => env.els['#tclr-' + env.id];
+  assert.match(env.html, /id="tclr-\d+" hidden onclick="tableClearFilters\(\d+\)">Effacer les filtres/);   // nothing to clear at first
+  apply(env, env.id, 1, '10');
+  env.ctx.tableToggleValue(env.id, 4, tablesOf(env.ctx).get(env.id).cols[4].values.indexOf('Salaire'), false);
+  env.ctx.tableFilter(env.id, 3, 'marche');
+  assert.equal(clear().hidden, false);
+  assert.deepEqual(ids(env.body()), ['d']);
+  const typed = {value: 'marche'}, chosen = {value: '3'};
+  env.mk('#tb-' + env.id).parentElement = {querySelectorAll: () => [typed, chosen]};
+  env.ctx.tableClearFilters(env.id);
+  assert.equal(ids(env.body()).length, 5);
+  assert.equal(clear().hidden, true);
+  assert.deepEqual([typed.value, chosen.value], ['', '']);
+  assert.deepEqual([0, 1, 4].map(i => button(env, i)), ['filtrer', 'filtrer', 'filtrer']);
+  assert.equal(env.count(), '5 lignes');
+});

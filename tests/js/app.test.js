@@ -816,7 +816,7 @@ test('the account page asks for all the transactions, not only the latest ones',
   assert.ok(calls.includes('/api/account/Suisse/transactions'));
   assert.ok(!calls.some(u => u.includes('limit')));
   const html = els['#main'].innerHTML;
-  assert.match(html, /1200 écritures<\/div>/);
+  assert.match(html, /1200 écritures<\/span>/);
   assert.equal((html.match(/<tr id="tx-/g) || []).length, 1200);
   assert.doesNotMatch(html, /plus récentes/);
 });

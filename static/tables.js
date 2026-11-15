@@ -60,6 +60,7 @@ function tableRefresh(id){
   const rows = tableRows(t);
   $('#tb-' + id).innerHTML = rows.length ? rows.map(t.row).join('') : `<tr><td colspan="${t.cols.length}" class="mut s">Aucune ligne</td></tr>`;
   $('#tc-' + id).textContent = tableCount(t, rows.length);
+  $('#tclr-' + id).hidden = !t.filters.some(f => f != null);   // the button to clear the filters is only there when there is one
   if (t.footer) $('#tf-' + id).innerHTML = t.footer(rows);
   t.cols.forEach((col, i) => {
     const fb = $(`#tfb-${id}-${i}`);
@@ -78,6 +79,16 @@ function tableFilter(id, i, raw){
   const col = t.cols[i], text = String(raw).trim();
   if (col.options) t.filters[i] = raw === '' ? null : col.options[Number(raw)];
   else t.filters[i] = text === '' ? null : text;
+  tableRefresh(id);
+}
+
+/* Removes the filters of all the columns: the text and drop-down controls of the header are emptied too */
+function tableClearFilters(id){
+  const t = tables.get(id);
+  if (!t) return;
+  t.filters = t.cols.map(() => null);
+  $('#tb-' + id).parentElement?.querySelectorAll?.('tr.filters input, tr.filters select').forEach(c => { c.value = ''; });
+  if (filterPop?.id === id) tableClosePopup();
   tableRefresh(id);
 }
 
@@ -137,7 +148,7 @@ function dataTable(cols, rows, row, opt = {}){
   const foot = opt.footer ? '<tfoot id="tf-' + id + '">' + opt.footer(rows) + '</tfoot>' : '';
   const head = c.map((col, i) => tableHeadCell(id, col, i)).join(''), filters = c.map((col, i) => tableFilterCell(id, col, i)).join('');
   return `<div class="scroll" style="${opt.style || ''}"><table class="data"><thead><tr>${head}</tr><tr class="filters">${filters}</tr></thead>` +
-    `<tbody id="tb-${id}">${rows.map(row).join('')}</tbody>${foot}</table></div><div class="mut" id="tc-${id}">${tableCount(t, rows.length)}</div>`;
+    `<tbody id="tb-${id}">${rows.map(row).join('')}</tbody>${foot}</table></div><div class="mut table-count"><span id="tc-${id}">${tableCount(t, rows.length)}</span> <button type="button" class="clear-filters" id="tclr-${id}" hidden onclick="tableClearFilters(${id})">Effacer les filtres</button></div>`;
 }
 
 /* ------------------------------------------------------------ pop-up of the filters on a range or on a list of values */
