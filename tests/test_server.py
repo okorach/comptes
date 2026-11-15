@@ -161,6 +161,22 @@ class ServerTest(unittest.TestCase):
                         {"filename": "a.csv", "bank": "generic", "data": base64.b64encode(csv).decode()})
         self.assertIsInstance(res, dict)
 
+    def test_import_format_follows_the_bank_of_the_account(self):
+        info = self.call("GET", "/api/account/Courant")                      # BankA: no import function
+        self.assertIsNone(info["import_format"])
+        self.assertEqual(info["import_formats"], ["BoursoBank", "ING", "LCL", "UBS", "Revolut", "Yuh", "generic"])
+        self.con.execute("UPDATE accounts SET bank='ING' WHERE id='Suisse'")
+        self.con.commit()
+        try:
+            self.assertEqual(self.call("GET", "/api/account/Suisse")["import_format"], "ING")
+            with mock.patch.object(server.bankimport, "parse", return_value=[]) as parse:
+                self.call("POST", "/api/account/Suisse/import", {"filename": "a.csv", "data": base64.b64encode(b"x").decode()})
+                self.call("POST", "/api/account/Suisse/import", {"filename": "a.csv", "bank": "LCL", "data": base64.b64encode(b"x").decode()})
+            self.assertEqual([c.args[0] for c in parse.call_args_list], ["ING", "ING"])   # no format given, or another one: the bank wins
+        finally:
+            self.con.execute("UPDATE accounts SET bank='BankB' WHERE id='Suisse'")
+            self.con.commit()
+
     def test_static_and_unknown(self):
         with urllib.request.urlopen(self.base + "/") as r:
             self.assertIn(b"<html", r.read().lower())

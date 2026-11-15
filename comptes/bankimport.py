@@ -89,6 +89,16 @@ def _g(r, i):
     return r[i] if i < len(r) and r[i] is not None else ""
 
 
+BANK_FORMATS = ("BoursoBank", "ING", "LCL", "UBS", "Revolut", "Yuh")   # the banks whose export file we can read
+GENERIC_FORMAT = "generic"                                                # the export of this application
+
+
+def import_format(bank: str | None) -> str | None:
+    """Format of the file to import for an account of this bank: the bank itself when we can read its export, else None
+    (the user then has to choose the format)"""
+    return bank if bank in BANK_FORMATS else None
+
+
 def parse(bank, account, filename, data, subs):
     """account: sqlite Row. Returns list of {date, amount, description}."""
     rows = rows_from_upload(filename, data)

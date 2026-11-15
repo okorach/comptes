@@ -1081,3 +1081,18 @@ test('the button "Pas un doublon" records it on the server and reloads the accou
   assert.ok(calls.some(c => /^POST .*transaction\/1\/not_duplicate$/.test(c)), calls.join('|'));
   assert.equal((els['#main'].innerHTML.match(/class="dup"/g) || []).length, 0);   // its twin is not flagged either
 });
+
+test('the import has no format selector when the bank of the account is known, else a selector with the formats', async () => {
+  const FORMATS = ['BoursoBank', 'ING', 'generic'];
+  const page = importFormat => load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR']}
+    : {account: {id: 'X', type: 'Courant', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: [], import_format: importFormat, import_formats: FORMATS})}));
+  const known = page('ING');
+  await settle();
+  await known.ctx.account('X');
+  assert.doesNotMatch(known.els['#main'].innerHTML, /imp_bank/);
+  assert.match(known.els['#main'].innerHTML, /id="imp_file"/);
+  const unknown = page(null);
+  await settle();
+  await unknown.ctx.account('X');
+  assert.match(unknown.els['#main'].innerHTML, /<select id="imp_bank"[^>]*><option >BoursoBank<\/option><option >ING<\/option><option >generic<\/option><\/select>/);
+});

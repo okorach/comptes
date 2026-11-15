@@ -293,10 +293,11 @@ async function account(id, msg = '', focus = null){
   const hasFx = tr.some(t => t.fx_currency), duplicates = duplicateIds(tr);
   const subOpts = '<option value=""></option>' + m.categories.map(c => `<option>${esc(c.subcategory)}</option>`).join('');
   const fields = modeFields(a, m, cur);
-  const importBanks = ['BoursoBank', 'ING', 'LCL', 'UBS', 'Revolut', 'Yuh', 'generic'];
-  const bankOptions = importBanks.map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('');
+  const bankOptions = (info.import_formats ?? []).map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('');
+  // the format of the file follows the bank of the account; the selector is only for a bank whose export we cannot read
+  const formatSelect = info.import_format ? '' : `<select id="imp_bank" title="Format du fichier">${bankOptions}</select>`;
   const importer = a.mode === 'flow' || a.mode === 'static'  // only the accounts that take amounts can import them
-    ? `<label class="inline">Importer <select id="imp_bank">${bankOptions}</select><input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : '';
+    ? `<label class="inline">Importer ${formatSelect}<input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : '';
   $('#main').innerHTML = `<h2><span class="d">${esc(a.id)}</span> <span class="mut d" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
   <div class="row">${focus ? '<button onclick="location.hash=\'#/search\'">← Retour à la recherche</button>' : '<button onclick="location.hash=\'#/\'">← Retour</button>'}
   <button onclick="${a.status === 'Open' ? 'askCloseAccount' : 'reopenAccount'}('${jsq(a.id)}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
@@ -418,7 +419,7 @@ function b64(buf){
 }
 async function importPreview(id){
   const f = $('#imp_file').files[0]; if (!f) return;
-  IMPORT = {filename: f.name, data: b64(await f.arrayBuffer()), bank: $('#imp_bank').value};
+  IMPORT = {filename: f.name, data: b64(await f.arrayBuffer()), bank: $('#imp_bank')?.value};   // no selector: the server uses the format of the bank of the account
   try {
     const r = await api('account/' + enc(id) + '/import', 'POST', IMPORT);
     const previewRow = p => `<tr><td>${p.date}</td><td class="n ${cls(p.amount)}">${num(p.amount)}</td><td>${esc(p.description)}</td></tr>`;
