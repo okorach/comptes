@@ -289,7 +289,7 @@ async function account(id, msg = '', focus = null){
   const hasDep = !['Courant', 'Autres', null].includes(a.type);
   const bank = a.bank || '';
   const hasFx = tr.some(t => t.fx_currency), duplicates = duplicateIds(tr);
-  const categoryOptions = chosen => '<option value=""></option>' + m.categories.map(c => `<option${c.subcategory === chosen ? ' selected' : ''}>${esc(c.subcategory)}</option>`).join('');
+  const categoryOptions = chosen => '<option value=""></option>' + m.categories.toSorted((a, b) => tableCompare(a.subcategory, b.subcategory)).map(c => `<option${c.subcategory === chosen ? ' selected' : ''}>${esc(c.subcategory)}</option>`).join('');
   const fixed = a.default_category || '';   // a default category: all the transactions are in it, the column and the field of the form are not needed
   const categoryField = fixed ? '' : `<label>Catégorie<select id="f_sub">${categoryOptions('')}</select></label>`;
   const fields = modeFields(a, cur);
@@ -473,7 +473,7 @@ async function admin(msg = ''){
 /* the table of the general category of every category */
 let CATEGORIES = [];   // the categories of the administration table: {subcategory, category, used}
 async function categoryMapping(){
-  const rows = CATEGORIES = await api('categories'), generals = [...new Set(rows.map(r => r.category).filter(Boolean))].toSorted(tableCompare);
+  const rows = CATEGORIES = (await api('categories')).toSorted((a, b) => tableCompare(a.subcategory, b.subcategory)), generals = [...new Set(rows.map(r => r.category).filter(Boolean))].toSorted(tableCompare);
   const remove = r => iconButton('trash', 'Supprimer la catégorie', 'removeCategory(this.dataset.sub)', 'data-sub="' + esc(r.subcategory) + '"');
   const line = r => `<tr><td>${esc(r.subcategory)}</td><td><input class="cat-general" list="generals" size="24" value="${esc(r.category ?? '')}" data-sub="${esc(r.subcategory)}" aria-label="Catégorie générale de ${esc(r.subcategory)}" onchange="saveGeneralCategory(this)"></td><td class="s actions">${remove(r)}</td></tr>`;
   const options = generals.map(g => '<option>' + esc(g) + '</option>').join('');

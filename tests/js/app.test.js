@@ -729,6 +729,14 @@ test('the categories table has a remove button for each category and a button to
   assert.match(els['#main'].innerHTML, /onclick="addCategory\(\)">Ajouter une catégorie<\/button>/);
 });
 
+test('the categories are in alphabetical order, whatever the case and the accents', async () => {
+  const rows = ['zèbre', 'Banque', 'alpha', 'Épargne', 'Charges'].map(subcategory => ({subcategory, category: 'X', used: 0}));
+  const {ctx, els} = categoryPage([], rows);
+  await settle();
+  await ctx.admin();
+  assert.deepEqual([...els['#catmap'].innerHTML.matchAll(/<tr><td>([^<]*)<\/td>/g)].map(x => x[1]), ['alpha', 'Banque', 'Charges', 'Épargne', 'zèbre']);
+});
+
 test('removing a category nobody uses needs no confirmation', async () => {
   const calls = [];
   const {ctx, els} = categoryPage(calls, CATEGORY_ROWS);
