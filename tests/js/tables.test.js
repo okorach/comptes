@@ -139,13 +139,14 @@ const TXCOLS = [
   {label: 'Date', filter: 'range', input: 'date', value: r => r.date}, {label: 'Montant', num: true, filter: 'range', value: r => r.amount},
   {label: 'Solde', num: true, filter: false, value: () => 0}, {label: 'Description', filter: 'text', value: r => r.desc}, {label: 'Sous-cat.', filter: 'checks', value: r => r.sub},
 ];
-const apply = (env, id, i, op, a, b = '') => {
+const apply = (env, id, i, min, max = '') => {   // opens the pop-up, fills the min and the max, submits
   env.ctx.tableOpenFilter(id, i, null);
-  env.mk('#fp-op').value = op; env.mk('#fp-a').value = a; env.mk('#fp-b').value = b;
+  env.mk('#fp-min').value = min; env.mk('#fp-max').value = max;
   env.ctx.tableApplyRange(id, i);
 };
+const button = (env, i) => env.els['#tfb-' + env.id + '-' + i].textContent;
 
-test('a date or amount filter opens a pop-up form; there is no filter on the balance; the description is a text search; the sub-category has check boxes', () => {
+test('a date or amount filter opens a pop-up form with a min and a max; there is no filter on the balance; the description is a text search; the sub-category has check boxes', () => {
   const env = setup(TXCOLS, TX);
   assert.equal((env.html.match(/class="fbtn"/g) || []).length, 3);                       // date, amount, sub-category
   assert.match(env.html, /id="tfb-\d+-0"[^>]*onclick="tableOpenFilter\(\d+,0,this\)">filtrer/);
@@ -154,50 +155,55 @@ test('a date or amount filter opens a pop-up form; there is no filter on the bal
   env.ctx.tableOpenFilter(env.id, 0, null);
   const pop = env.els['#filter-pop'];
   assert.equal(pop.hidden, false);
-  assert.match(pop.innerHTML, /À partir du \(inclus\)/);
-  assert.match(pop.innerHTML, /Jusqu&#39;au|Jusqu'au \(inclus\)/);
-  assert.match(pop.innerHTML, /Entre deux dates \(incluses\)/);
-  assert.match(pop.innerHTML, /type="date"/);
+  assert.match(pop.innerHTML, /Min<input id="fp-min" type="date"/);
+  assert.match(pop.innerHTML, /Max<input id="fp-max" type="date"/);
+  assert.doesNotMatch(pop.innerHTML, /<select/);                                           // no choice of condition
   env.ctx.tableOpenFilter(env.id, 1, null);
-  assert.match(pop.innerHTML, /Supérieur ou égal à/);
-  assert.match(pop.innerHTML, /Entre deux valeurs \(incluses\)/);
+  assert.match(pop.innerHTML, /Min<input id="fp-min" type="text"/);
   env.ctx.tableOpenFilter(env.id, 1, null);                                                // the same button again closes it
   assert.equal(pop.hidden, true);
 });
 
-test('the date filter: from, up to, or between two dates, the limits included', () => {
+test('the date filter: a min and/or a max, the limits included, an empty one meaning no limit', () => {
   const env = setup(TXCOLS, TX);
-  apply(env, env.id, 0, 'ge', '2024-03-10');
+  apply(env, env.id, 0, '2024-03-10');                                                     // min only
   assert.deepEqual(ids(env.body()), ['c', 'd', 'e']);
-  assert.equal(env.els['#tfb-' + env.id + '-0'].textContent, '≥ 2024-03-10');
-  apply(env, env.id, 0, 'le', '2024-02-10');
+  assert.equal(button(env, 0), '≥ 2024-03-10');
+  apply(env, env.id, 0, '', '2024-02-10');                                                 // max only
   assert.deepEqual(ids(env.body()), ['a', 'b']);
-  apply(env, env.id, 0, 'between', '2024-02-10', '2024-03-10');
+  assert.equal(button(env, 0), '≤ 2024-02-10');
+  apply(env, env.id, 0, '2024-02-10', '2024-03-10');
   assert.deepEqual(ids(env.body()), ['b', 'c']);
-  apply(env, env.id, 0, 'between', '2024-03-10', '2024-02-10');                          // limits in the wrong order
+  assert.equal(button(env, 0), '2024-02-10 – 2024-03-10');
+  apply(env, env.id, 0, '2024-03-10', '2024-02-10');                                       // limits in the wrong order
   assert.deepEqual(ids(env.body()), ['b', 'c']);
-  apply(env, env.id, 0, 'ge', 'not a date');
+  apply(env, env.id, 0, 'not a date');
   assert.match(env.els['#fp-err'].textContent, /Date invalide/);
   assert.deepEqual(ids(env.body()), ['b', 'c']);                                           // unchanged
-  env.ctx.tableClearFilter(env.id, 0);
+  apply(env, env.id, 0, '', '');                                                           // both empty: no filter
   assert.equal(ids(env.body()).length, 5);
-  assert.equal(env.els['#tfb-' + env.id + '-0'].textContent, 'filtrer');
+  assert.equal(button(env, 0), 'filtrer');
+  assert.equal(env.els['#filter-pop'].hidden, true);
 });
 
-test('the amount filter: at least, at most, or between two values, the limits included, to the cent, with a comma or a point', () => {
+test('the amount filter: a min and/or a max, the limits included, to the cent, with a comma or a point', () => {
   const env = setup(TXCOLS, TX);
-  apply(env, env.id, 1, 'ge', '10');
+  apply(env, env.id, 1, '10');
   assert.deepEqual(ids(env.body()), ['b', 'c', 'd']);                                      // 10.004 counts as 10.00; no amount: never
-  apply(env, env.id, 1, 'le', '10,00');
+  apply(env, env.id, 1, '', '10,00');
   assert.deepEqual(ids(env.body()), ['a', 'b', 'c']);
-  apply(env, env.id, 1, 'between', '-50', '10');
+  apply(env, env.id, 1, '-50', '10');
   assert.deepEqual(ids(env.body()), ['a', 'b', 'c']);
-  apply(env, env.id, 1, 'between', '11', '1 000');
+  assert.equal(button(env, 1), '-50 – 10');
+  apply(env, env.id, 1, '11', '1 000');
   assert.deepEqual(ids(env.body()), ['d']);
-  apply(env, env.id, 1, 'ge', 'abc');
+  apply(env, env.id, 1, 'abc');
   assert.match(env.els['#fp-err'].textContent, /Valeur invalide/);
-  apply(env, env.id, 1, 'between', '5', '');                                               // the second value is missing
+  apply(env, env.id, 1, '5', 'x');
   assert.match(env.els['#fp-err'].textContent, /Valeur invalide/);
+  assert.deepEqual(ids(env.body()), ['d']);
+  apply(env, env.id, 1, '0');                                                              // a zero is a limit, not an empty value
+  assert.deepEqual(ids(env.body()), ['b', 'c', 'd']);
 });
 
 test('the description filter keeps the transactions that contain the text, whatever the case and the accents', () => {
@@ -236,7 +242,7 @@ test('the sub-category filter has a check box per value; unchecking removes them
 
 test('the filters combine, and Escape or a change of page closes the pop-up', () => {
   const env = setup(TXCOLS, TX);
-  apply(env, env.id, 1, 'ge', '10');
+  apply(env, env.id, 1, '10');
   env.ctx.tableToggleValue(env.id, 4, tablesOf(env.ctx).get(env.id).cols[4].values.indexOf('Salaire'), false);
   assert.deepEqual(ids(env.body()), ['c', 'd']);
   env.ctx.tableOpenFilter(env.id, 0, null);

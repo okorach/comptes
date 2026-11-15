@@ -6,15 +6,13 @@ let tableSeq = 0;
 const tableText = (col, r) => String(col.value(r) ?? '');
 const tableFold = s => s.normalize('NFD').replaceAll(/[̀-ͯ]/g, '').toLowerCase();  // case and accent insensitive search
 
-/* A value in the range of a filter {op: 'ge' (from a) | 'le' (up to a) | 'between' (a to b), a, b}, the limits included.
+/* A value in the range of a filter {min, max}, the limits included; a missing limit (null) means no minimum / no maximum.
    Amounts are compared to the cent; dates are ISO strings, which sort like the dates they write. */
 function rangeMatches(f, value, isDate){
   if (value == null || value === '') return false;
   const at = x => isDate ? x : Math.round(x * 100), v = at(isDate ? String(value) : value);
-  const [low, high] = f.op === 'between' && f.a > f.b ? [f.b, f.a] : [f.a, f.b];
-  if (f.op === 'ge') return v >= at(f.a);
-  if (f.op === 'le') return v <= at(f.a);
-  return v >= at(low) && v <= at(high);
+  const [low, high] = f.min != null && f.max != null && f.min > f.max ? [f.max, f.min] : [f.min, f.max];
+  return (low == null || v >= at(low)) && (high == null || v <= at(high));
 }
 
 /* Rows matching the filters of all the columns: an exact value for a drop-down list, a substring for a text search,
@@ -102,9 +100,8 @@ function tableFilterSummary(col, f){
   if (f == null) return 'filtrer';
   if (col.filter === 'checks') return `${f.length} / ${col.values.length}`;
   const shown = x => col.input === 'date' ? x : formatNumber(x, 0, 2);
-  if (f.op === 'ge') return `≥ ${shown(f.a)}`;
-  if (f.op === 'le') return `≤ ${shown(f.a)}`;
-  return `${shown(f.a)} – ${shown(f.b)}`;
+  if (f.min != null && f.max != null) return `${shown(f.min)} – ${shown(f.max)}`;
+  return f.min == null ? `≤ ${shown(f.max)}` : `≥ ${shown(f.min)}`;
 }
 
 function tableFilterCell(id, col, i){
@@ -128,7 +125,7 @@ function tableWithOptions(col, rows){
 }
 
 /* cols: [{label, value: row => sortable/filterable value, num?: right-aligned, sort?: false,
-   filter?: false | 'text' (contains) | 'range' (pop-up: from, up to, between; input: 'date' for dates) | 'checks' (pop-up: check boxes of the values)}],
+   filter?: false | 'text' (contains) | 'range' (pop-up: min and max, either may be empty; input: 'date' for dates) | 'checks' (pop-up: check boxes of the values)}],
    row: row => '<tr>…</tr>'.
    opt: {noun: what the rows are called in the counter, style: style of the scrolling container, footer: rows => '<tr>…</tr>' of a last line (totals)
    computed on the rows shown, so it follows the filters} */
@@ -160,26 +157,13 @@ function tableSetFilter(id, i, f){
   tableRefresh(id);
 }
 
-const RANGE_OPS = {
-  date: [['ge', 'À partir du (inclus)'], ['le', "Jusqu'au (inclus)"], ['between', 'Entre deux dates (incluses)']],
-  number: [['ge', 'Supérieur ou égal à'], ['le', 'Inférieur ou égal à'], ['between', 'Entre deux valeurs (incluses)']],
-};
-
 function tableRangeForm(id, i, col, f){
-  const kind = col.input === 'date' ? 'date' : 'number', cur = f ?? {op: 'ge'};
-  const input = (name, v) => `<input id="fp-${name}" ${kind === 'date' ? 'type="date"' : 'type="text" inputmode="decimal" size="10"'} value="${esc(v ?? '')}" aria-label="${name === 'a' ? 'Valeur' : 'Deuxième valeur'}">`;
-  const ops = RANGE_OPS[kind].map(([v, l]) => `<option value="${v}"${v === cur.op ? ' selected' : ''}>${l}</option>`).join('');
+  const type = col.input === 'date' ? 'type="date"' : 'type="text" inputmode="decimal" size="10"', cur = f ?? {};
+  const field = (name, label, v) => `<label>${label}<input id="fp-${name}" ${type} value="${esc(v ?? '')}"></label>`;
   return `<form onsubmit="tableApplyRange(${id},${i});return false"><b>${esc(col.label)}</b>
-    <select id="fp-op" aria-label="Condition" onchange="tableRangeOp()">${ops}</select>
-    <div class="fp-values">${input('a', cur.a)}<span id="fp-and"> et </span>${input('b', cur.b)}</div><div id="fp-err" class="err"></div>
+    <div class="fp-values">${field('min', 'Min', cur.min)}${field('max', 'Max', cur.max)}</div>
+    <div class="mut">Bornes incluses ; une borne vide : pas de limite.</div><div id="fp-err" class="err"></div>
     <div class="fp-buttons"><button type="submit" class="primary">Appliquer</button><button type="button" onclick="tableClearFilter(${id},${i})">Effacer</button></div></form>`;
-}
-
-/* The second value is only needed between two values */
-function tableRangeOp(){
-  const between = $('#fp-op').value === 'between';
-  $('#fp-b').hidden = !between;
-  $('#fp-and').hidden = !between;
 }
 
 function tableChecksForm(id, i, col, f){
@@ -198,22 +182,22 @@ function tableOpenFilter(id, i, button){
   const box = button?.getBoundingClientRect?.();
   if (box) { pop.style.top = box.bottom + 4 + 'px'; pop.style.left = Math.max(8, Math.min(box.left, window.innerWidth - 300)) + 'px'; }
   pop.hidden = false;
-  if (col.filter === 'range') tableRangeOp();
 }
 
 function tableApplyRange(id, i){
   const t = tables.get(id);
   if (!t) return;
-  const isDate = t.cols[i].input === 'date', op = $('#fp-op').value;
-  const read = name => {
+  const isDate = t.cols[i].input === 'date';
+  const read = name => {   // null: no limit; undefined: not a valid value
     const text = $('#fp-' + name).value.trim();
-    if (isDate) return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+    if (text === '') return null;
+    if (isDate) return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : undefined;
     const n = Number(text.replaceAll(/\s/g, '').replace(',', '.'));
-    return text === '' || Number.isNaN(n) ? null : n;
+    return Number.isNaN(n) ? undefined : n;
   };
-  const a = read('a'), b = op === 'between' ? read('b') : undefined;
-  if (a === null || b === null) { $('#fp-err').textContent = isDate ? 'Date invalide' : 'Valeur invalide'; return; }
-  tableSetFilter(id, i, {op, a, b});
+  const min = read('min'), max = read('max');
+  if (min === undefined || max === undefined) { $('#fp-err').textContent = isDate ? 'Date invalide' : 'Valeur invalide'; return; }
+  tableSetFilter(id, i, min === null && max === null ? null : {min, max});   // both empty: no filter
   tableClosePopup();
 }
 
