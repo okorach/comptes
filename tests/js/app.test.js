@@ -1016,3 +1016,10 @@ test('the month, quarter or year in progress gets an orange bullet in the spendi
   assert.match(flag('2026-11', 'month', now), /stale-dot warn.*Mois incomplet/);
   assert.equal(flag('2026-10', 'month', now), '');
 });
+
+test('the patrimoine chart is 50 % taller than the default one (420 instead of 280)', async () => {
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('networth') ? [{month: '2024-01', total: 1}, {month: '2024-02', total: 2}] : url.includes('meta') ? {categories: [], master_currency: 'EUR'} : [])}));
+  await settle();
+  await ctx.home();
+  assert.match(els['#main'].innerHTML, /<svg viewBox="0 0 1000 420"/);
+});

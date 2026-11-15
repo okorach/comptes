@@ -84,12 +84,13 @@ async function home(){
   $('#main').innerHTML = `<div class="mut">Patrimoine</div><div class="big">${num(total)}</div>
   ${drawChart(nw.map(p => p.month), [
     {name: `Épargne mensuelle (moy. ${SAVINGS_MONTHS} mois)`, color: 'var(--pos-light)', type: 'bar', axis: 'right', unit: sym(MASTER) + '/mois', values: monthlySavings(nw.map(p => p.total))},
-    {name: 'Patrimoine', color: 'var(--acc)', type: 'line', values: nw.map(p => p.total)}], {xticks: 12, unit: sym(MASTER)})}
+    {name: 'Patrimoine', color: 'var(--acc)', type: 'line', values: nw.map(p => p.total)}], {xticks: 12, unit: sym(MASTER), height: NETWORTH_CHART_HEIGHT})}
   <div class="title-row"><h3>Comptes</h3><label><input type="checkbox" id="showClosed" ${open ? '' : 'checked'} onchange="home()"> Montrer les comptes fermés</label></div>${dataTable(homeColumns(), shown.sort((a, b) => b.balance_main - a.balance_main), homeRow, {noun: 'comptes', footer: homeTotal})}
   <div class="row" style="align-items:start">${paneStart('bank', 'Par banque')}${tbl(sumBy(a => a.bank))}</details>
   ${paneStart('year', 'Par année de disponibilité')}${tbl(Object.entries(byYear).sort((a, b) => a[0] - b[0]).map(([k, v]) => [k === '0' ? 'Immédiate' : k, v]))}</details>
   ${paneStart('type', 'Par type')}${tbl(sumBy(a => a.type))}</details></div>`;
 }
+const NETWORTH_CHART_HEIGHT = 420;   // 50 % taller than the default 280
 const homeColumns = () => [
   {label: 'Compte', filter: false, value: a => a.id}, {label: 'Solde ' + sym(MASTER), num: true, filter: false, value: a => a.balance_main},
   {label: 'Solde (devise)', num: true, filter: false, value: a => a.currency === MASTER ? null : a.balance_native}, {label: 'Type', value: a => a.type}, {label: 'Banque', value: a => a.bank},
