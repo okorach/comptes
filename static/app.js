@@ -188,9 +188,10 @@ async function recalc(){
 /* Small line icons (24x24, drawn with the colour of the text) for the buttons of the rows */
 const ICONS = {
   pen: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  filterOff: '<path d="M3 4h16l-6 7.5V18l-4 2v-8.5Z"/><path d="M16.5 14.5l5 5"/><path d="M21.5 14.5l-5 5"/>',
   trash: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>',
 };
-const iconButton = (icon, label, onclick) => `<button class="icon" title="${label}" aria-label="${label}" onclick="${onclick}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[icon]}</svg></button>`;
+const iconButton = (icon, label, onclick, attrs = '') => `<button class="icon"${attrs ? ' ' + attrs : ''} title="${label}" aria-label="${label}" onclick="${onclick}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[icon]}</svg></button>`;
 let FOCUS = null;  // transaction to show (highlighted) in the account page: the one found by the search
 /* Accounts whose transactions are shown without the « Montant » columns (the balance is what matters, the amounts are the movements of the market) */
 const NO_AMOUNT_TYPES = new Set(['Assurance Vie', 'PER', 'PERCO', 'PEA', 'Actions', 'PEE', 'Investment']);
@@ -265,10 +266,11 @@ function depositsPanel(info, a, cur){
   <div class="scroll" style="max-height:340px;max-width:460px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;
 }
 const txColumns = (foreign, cur, hasFx, amounts = true) => [
-  {label: 'Date', value: t => t.date}, ...(amounts ? [{label: 'Montant ' + sym(MASTER), num: true, value: t => t.amount_main}] : []), {label: 'Solde ' + sym(MASTER), num: true, value: t => t.balance_main},
-  ...(foreign && amounts ? [{label: `Montant ${cur}`, num: true, value: t => t.native_amount}] : []), ...(foreign ? [{label: `Solde ${cur}`, num: true, value: t => t.native_balance}] : []),
+  {label: 'Date', filter: 'range', input: 'date', value: t => t.date}, ...(amounts ? [{label: 'Montant ' + sym(MASTER), num: true, filter: 'range', value: t => t.amount_main}] : []),
+  {label: 'Solde ' + sym(MASTER), num: true, filter: false, value: t => t.balance_main},
+  ...(foreign && amounts ? [{label: `Montant ${cur}`, num: true, filter: 'range', value: t => t.native_amount}] : []), ...(foreign ? [{label: `Solde ${cur}`, num: true, filter: false, value: t => t.native_balance}] : []),
   ...(hasFx ? [{label: "Montant d'origine", num: true, value: t => t.fx_amount}, {label: "Devise d'origine", value: t => t.fx_currency}] : []),
-  {label: 'Description', value: t => t.description}, {label: 'Sous-cat.', value: t => t.subcategory}, {label: '', sort: false, filter: false, value: () => null},
+  {label: 'Description', filter: 'text', value: t => t.description}, {label: 'Sous-cat.', filter: 'checks', value: t => t.subcategory}, {label: '', sort: false, filter: false, clearButton: true, value: () => null},
 ];
 /* Input fields of an entry, depending on the way the balance of the account is kept */
 function modeFields(a, m, cur){

@@ -126,3 +126,181 @@ test('the filter of a numeric column is right-aligned like its header and values
   assert.match(filters, /<th class="n"><select[^>]*aria-label="Filtrer Montant"/);
   assert.match(filters, /<th class="n"><input[^>]*aria-label="Filtrer Solde"/);
 });
+
+/* ---- filters with a pop-up: range of dates or amounts, check boxes */
+const TX = [
+  {id: 'a', date: '2024-01-10', amount: -50, sub: 'Courses', desc: 'Super Marché'},
+  {id: 'b', date: '2024-02-10', amount: 10, sub: 'Salaire', desc: 'Virement'},
+  {id: 'c', date: '2024-03-10', amount: 10.004, sub: '', desc: 'Café'},
+  {id: 'd', date: '2024-03-11', amount: 100, sub: 'Courses', desc: 'marche'},
+  {id: 'e', date: '2024-04-01', amount: null, sub: 'Loisirs', desc: null},
+];
+const TXCOLS = [
+  {label: 'Date', filter: 'range', input: 'date', value: r => r.date}, {label: 'Montant', num: true, filter: 'range', value: r => r.amount},
+  {label: 'Solde', num: true, filter: false, value: () => 0}, {label: 'Description', filter: 'text', value: r => r.desc}, {label: 'Sous-cat.', filter: 'checks', value: r => r.sub},
+];
+const apply = (env, id, i, min, max = '') => {   // opens the pop-up, fills the min and the max, submits
+  env.ctx.tableOpenFilter(id, i, null);
+  env.mk('#fp-min').value = min; env.mk('#fp-max').value = max;
+  env.ctx.tableApplyRange(id, i);
+};
+const button = (env, i) => env.els['#tfb-' + env.id + '-' + i].textContent;
+
+test('a date or amount filter opens a pop-up form with a min and a max; there is no filter on the balance; the description is a text search; the sub-category has check boxes', () => {
+  const env = setup(TXCOLS, TX);
+  assert.equal((env.html.match(/class="fbtn"/g) || []).length, 3);                       // date, amount, sub-category
+  assert.match(env.html, /id="tfb-\d+-0"[^>]*onclick="tableOpenFilter\(\d+,0,this\)">filtrer/);
+  assert.doesNotMatch(env.html, /tfb-\d+-2/);                                              // the balance has none
+  assert.match(env.html, /<input type="search"[^>]*aria-label="Filtrer Description"/);   // contains, not a drop-down list
+  env.ctx.tableOpenFilter(env.id, 0, null);
+  const pop = env.els['#filter-pop'];
+  assert.equal(pop.hidden, false);
+  assert.match(pop.innerHTML, /Entre <input id="fp-min" type="date"[^>]*> Et <input id="fp-max" type="date"/);
+  assert.match(pop.innerHTML, /class="fp-cancel"[^>]*>✕<\/button><button type="submit" class="fp-ok"[^>]*>✓<\/button>/);   // grey cross, green tick
+  assert.doesNotMatch(pop.innerHTML, /<select|Bornes incluses|<b>/);                       // no choice of condition, no comment
+  env.ctx.tableOpenFilter(env.id, 1, null);
+  assert.match(pop.innerHTML, /Entre <input id="fp-min" type="text"/);
+  env.ctx.tableOpenFilter(env.id, 1, null);                                                // the same button again closes it
+  assert.equal(pop.hidden, true);
+});
+
+test('the date filter: a min and/or a max, the limits included, an empty one meaning no limit', () => {
+  const env = setup(TXCOLS, TX);
+  apply(env, env.id, 0, '2024-03-10');                                                     // min only
+  assert.deepEqual(ids(env.body()), ['c', 'd', 'e']);
+  assert.equal(button(env, 0), '≥ 2024-03-10');
+  apply(env, env.id, 0, '', '2024-02-10');                                                 // max only
+  assert.deepEqual(ids(env.body()), ['a', 'b']);
+  assert.equal(button(env, 0), '≤ 2024-02-10');
+  apply(env, env.id, 0, '2024-02-10', '2024-03-10');
+  assert.deepEqual(ids(env.body()), ['b', 'c']);
+  assert.equal(button(env, 0), '2024-02-10 – 2024-03-10');
+  apply(env, env.id, 0, '2024-03-10', '2024-02-10');                                       // limits in the wrong order
+  assert.deepEqual(ids(env.body()), ['b', 'c']);
+  apply(env, env.id, 0, 'not a date');
+  assert.match(env.els['#fp-err'].textContent, /Date invalide/);
+  assert.deepEqual(ids(env.body()), ['b', 'c']);                                           // unchanged
+  apply(env, env.id, 0, '', '');                                                           // both empty: no filter
+  assert.equal(ids(env.body()).length, 5);
+  assert.equal(button(env, 0), 'filtrer');
+  assert.equal(env.els['#filter-pop'].hidden, true);
+});
+
+test('the amount filter: a min and/or a max, the limits included, to the cent, with a comma or a point', () => {
+  const env = setup(TXCOLS, TX);
+  apply(env, env.id, 1, '10');
+  assert.deepEqual(ids(env.body()), ['b', 'c', 'd']);                                      // 10.004 counts as 10.00; no amount: never
+  apply(env, env.id, 1, '', '10,00');
+  assert.deepEqual(ids(env.body()), ['a', 'b', 'c']);
+  apply(env, env.id, 1, '-50', '10');
+  assert.deepEqual(ids(env.body()), ['a', 'b', 'c']);
+  assert.equal(button(env, 1), '-50 – 10');
+  apply(env, env.id, 1, '11', '1 000');
+  assert.deepEqual(ids(env.body()), ['d']);
+  apply(env, env.id, 1, 'abc');
+  assert.match(env.els['#fp-err'].textContent, /Valeur invalide/);
+  apply(env, env.id, 1, '5', 'x');
+  assert.match(env.els['#fp-err'].textContent, /Valeur invalide/);
+  assert.deepEqual(ids(env.body()), ['d']);
+  apply(env, env.id, 1, '0');                                                              // a zero is a limit, not an empty value
+  assert.deepEqual(ids(env.body()), ['b', 'c', 'd']);
+});
+
+test('the description filter keeps the transactions that contain the text, whatever the case and the accents', () => {
+  const env = setup(TXCOLS, TX);
+  env.ctx.tableFilter(env.id, 3, 'MARCH');
+  assert.deepEqual(ids(env.body()), ['a', 'd']);
+  env.ctx.tableFilter(env.id, 3, 'cafe');
+  assert.deepEqual(ids(env.body()), ['c']);
+});
+
+test('the sub-category filter has a check box per value; unchecking removes them, all checked is no filter', () => {
+  const env = setup(TXCOLS, TX);
+  env.ctx.tableOpenFilter(env.id, 4, null);
+  const pop = env.els['#filter-pop'].innerHTML;
+  assert.equal((pop.match(/type="checkbox" checked/g) || []).length, 4);                   // (vide), Courses, Loisirs, Salaire
+  assert.match(pop, /\(vide\)/);
+  const values = tablesOf(env.ctx).get(env.id).cols[4].values;
+  const k = name => values.indexOf(name);
+  env.ctx.tableToggleValue(env.id, 4, k('Courses'), false);
+  assert.deepEqual(ids(env.body()), ['b', 'c', 'e']);
+  assert.equal(env.els['#tfb-' + env.id + '-4'].textContent, '3 / 4');
+  env.ctx.tableToggleValue(env.id, 4, k('Salaire'), false);
+  assert.deepEqual(ids(env.body()), ['c', 'e']);
+  env.ctx.tableToggleValue(env.id, 4, k('Courses'), true);
+  assert.deepEqual(ids(env.body()), ['a', 'c', 'd', 'e']);
+  env.ctx.tableToggleValue(env.id, 4, k('Salaire'), true);                                 // all checked again
+  assert.equal(ids(env.body()).length, 5);
+  assert.equal(env.els['#tfb-' + env.id + '-4'].textContent, 'filtrer');
+  env.ctx.tableSetChecks(env.id, 4, []);                                                   // "Aucun"
+  assert.match(env.body(), /Aucune ligne/);
+  env.ctx.tableOpenFilter(env.id, 4, null);
+  env.ctx.tableClearFilter(env.id, 4);                                                     // "Tout"
+  assert.equal(ids(env.body()).length, 5);
+  assert.equal(env.els['#filter-pop'].hidden, true);
+});
+
+test('the filters combine, and Escape or a change of page closes the pop-up', () => {
+  const env = setup(TXCOLS, TX);
+  apply(env, env.id, 1, '10');
+  env.ctx.tableToggleValue(env.id, 4, tablesOf(env.ctx).get(env.id).cols[4].values.indexOf('Salaire'), false);
+  assert.deepEqual(ids(env.body()), ['c', 'd']);
+  env.ctx.tableOpenFilter(env.id, 0, null);
+  env.listeners.keydown.forEach(fn => fn({key: 'Escape'}));
+  assert.equal(env.els['#filter-pop'].hidden, true);
+  env.ctx.tableOpenFilter(env.id, 0, null);
+  env.listeners.hashchange.forEach(fn => fn());
+  assert.equal(env.els['#filter-pop'].hidden, true);
+});
+
+test('the transactions of an account have these filters: no balance filter, a range on the date and the amount', async () => {
+  const tx = {id: 1, date: '2024-01-01', amount_main: -5, native_amount: -5, balance_main: 1, description: 'x', in_budget: null};
+  const account = {account: {id: 'X', type: 'Courant', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []};
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [tx] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR']} : account)}));
+  await new Promise(r => setTimeout(r, 10));
+  await ctx.account('X');
+  const html = els['#main'].innerHTML;
+  assert.equal((html.match(/class="fbtn"/g) || []).length, 3);   // date, amount, sub-category
+});
+
+test('a button clears all the filters of the table (and empties the controls of the header); it is only shown when a filter is active', () => {
+  const env = setup(TXCOLS, TX);
+  const clear = () => env.els['#tclr-' + env.id];
+  assert.match(env.html, /<button type="button" class="clear-filters" id="tclr-\d+" hidden onclick="tableClearFilters\(\d+\)">Effacer les filtres/);   // nothing to clear at first
+  apply(env, env.id, 1, '10');
+  env.ctx.tableToggleValue(env.id, 4, tablesOf(env.ctx).get(env.id).cols[4].values.indexOf('Salaire'), false);
+  env.ctx.tableFilter(env.id, 3, 'marche');
+  assert.equal(clear().hidden, false);
+  assert.deepEqual(ids(env.body()), ['d']);
+  const typed = {value: 'marche'}, chosen = {value: '3'};
+  env.mk('#tb-' + env.id).parentElement = {querySelectorAll: () => [typed, chosen]};
+  env.ctx.tableClearFilters(env.id);
+  assert.equal(ids(env.body()).length, 5);
+  assert.equal(clear().hidden, true);
+  assert.deepEqual([typed.value, chosen.value], ['', '']);
+  assert.deepEqual([0, 1, 4].map(i => button(env, i)), ['filtrer', 'filtrer', 'filtrer']);
+  assert.equal(env.count(), '5 lignes');
+});
+
+test('when a column has the clear button, it is the icon of the filter row, in the column of the row buttons, with a tooltip, hidden until a filter is active', () => {
+  const cols = [...TXCOLS, {label: '', sort: false, filter: false, clearButton: true, value: () => null}];
+  const env = setup(cols, TX);
+  assert.match(env.html, /<th class="s actions"><button class="icon" id="tclr-\d+" hidden title="Supprimer les filtres" aria-label="Supprimer les filtres" onclick="tableClearFilters\(\d+\)"><svg[^>]*><path d="M3 4h16/);
+  assert.doesNotMatch(env.html, /Effacer les filtres/);                                    // not a second button next to the counter
+  apply(env, env.id, 1, '10');
+  assert.equal(env.els['#tclr-' + env.id].hidden, false);
+  env.ctx.tableClearFilters(env.id);
+  assert.equal(env.els['#tclr-' + env.id].hidden, true);
+  assert.equal(ids(env.body()).length, 5);
+});
+
+test('the transactions of an account have the clear icon in the filter row', async () => {
+  const tx = {id: 1, date: '2024-01-01', amount_main: -5, native_amount: -5, balance_main: 1, description: 'x', in_budget: null};
+  const account = {account: {id: 'X', type: 'Courant', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []};
+  const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [tx] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR']} : account)}));
+  await new Promise(r => setTimeout(r, 10));
+  await ctx.account('X');
+  const html = els['#main'].innerHTML;
+  assert.match(html, /<tr class="filters">.*<th class="s actions"><button class="icon" id="tclr-\d+" hidden title="Supprimer les filtres"/s);
+  assert.doesNotMatch(html, /Effacer les filtres/);
+});

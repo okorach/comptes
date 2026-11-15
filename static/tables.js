@@ -6,11 +6,23 @@ let tableSeq = 0;
 const tableText = (col, r) => String(col.value(r) ?? '');
 const tableFold = s => s.normalize('NFD').replaceAll(/[̀-ͯ]/g, '').toLowerCase();  // case and accent insensitive search
 
-/* Rows matching the filters of all the columns: an exact value for a drop-down list, a substring for a text search */
+/* A value in the range of a filter {min, max}, the limits included; a missing limit (null) means no minimum / no maximum.
+   Amounts are compared to the cent; dates are ISO strings, which sort like the dates they write. */
+function rangeMatches(f, value, isDate){
+  if (value == null || value === '') return false;
+  const at = x => isDate ? x : Math.round(x * 100), v = at(isDate ? String(value) : value);
+  const [low, high] = f.min != null && f.max != null && f.min > f.max ? [f.max, f.min] : [f.min, f.max];
+  return (low == null || v >= at(low)) && (high == null || v <= at(high));
+}
+
+/* Rows matching the filters of all the columns: an exact value for a drop-down list, a substring for a text search,
+   a range for a date or an amount, one of the checked values for a list of check boxes */
 function tableMatches(t, r){
   return t.cols.every((col, i) => {
     const f = t.filters[i];
     if (f == null) return true;
+    if (col.filter === 'range') return rangeMatches(f, col.value(r), col.input === 'date');
+    if (col.filter === 'checks') return f.includes(tableText(col, r));
     const txt = tableText(col, r);
     return col.options ? txt === f : tableFold(txt).includes(tableFold(f));
   });
@@ -48,8 +60,11 @@ function tableRefresh(id){
   const rows = tableRows(t);
   $('#tb-' + id).innerHTML = rows.length ? rows.map(t.row).join('') : `<tr><td colspan="${t.cols.length}" class="mut s">Aucune ligne</td></tr>`;
   $('#tc-' + id).textContent = tableCount(t, rows.length);
+  $('#tclr-' + id).hidden = !t.filters.some(f => f != null);   // the button to clear the filters is only there when there is one
   if (t.footer) $('#tf-' + id).innerHTML = t.footer(rows);
   t.cols.forEach((col, i) => {
+    const fb = $(`#tfb-${id}-${i}`);
+    if (fb && (col.filter === 'range' || col.filter === 'checks')) { fb.textContent = tableFilterSummary(col, t.filters[i]); fb.classList.toggle('on', t.filters[i] != null); }
     const dir = t.sort?.col === i ? t.sort.dir : null, btn = $(`#ts-${id}-${i}`);
     if (!btn) return;
     btn.textContent = SORT_MARK[dir] || '⇅';
@@ -67,6 +82,16 @@ function tableFilter(id, i, raw){
   tableRefresh(id);
 }
 
+/* Removes the filters of all the columns: the text and drop-down controls of the header are emptied too */
+function tableClearFilters(id){
+  const t = tables.get(id);
+  if (!t) return;
+  t.filters = t.cols.map(() => null);
+  $('#tb-' + id).parentElement?.querySelectorAll?.('tr.filters input, tr.filters select').forEach(c => { c.value = ''; });
+  if (filterPop?.id === id) tableClosePopup();
+  tableRefresh(id);
+}
+
 /* Successive clicks on the same column: ascending, descending, back to the original order */
 function tableSort(id, i){
   const t = tables.get(id);
@@ -81,10 +106,27 @@ function tableHeadCell(id, col, i){
   return `<th class="${col.num ? 'n' : ''}">${esc(col.label)}${btn}</th>`;
 }
 
+/* Text of the button of a filter with a pop-up: what is filtered, or "filtrer" */
+function tableFilterSummary(col, f){
+  if (f == null) return 'filtrer';
+  if (col.filter === 'checks') return `${f.length} / ${col.values.length}`;
+  const shown = x => col.input === 'date' ? x : formatNumber(x, 0, 2);
+  if (f.min != null && f.max != null) return `${shown(f.min)} – ${shown(f.max)}`;
+  return f.min == null ? `≤ ${shown(f.max)}` : `≥ ${shown(f.min)}`;
+}
+
 function tableFilterCell(id, col, i){
+  // the icon that removes all the filters, in the filter row, in the column of the buttons of the rows (hidden while there is no filter)
+  if (col.clearButton) {
+    const icon = iconButton('filterOff', 'Supprimer les filtres', 'tableClearFilters(' + id + ')', 'id="tclr-' + id + '" hidden');
+    return '<th class="s actions">' + icon + '</th>';
+  }
   if (col.filter === false) return '<th></th>';
   const cell = col.num ? '<th class="n">' : '<th>';  // the filter of a numeric column sits under its right-aligned header
   const label = `aria-label="Filtrer ${esc(col.label)}"`;
+  if (col.filter === 'range' || col.filter === 'checks') {
+    return `${cell}<button type="button" class="fbtn" id="tfb-${id}-${i}" ${label} onclick="tableOpenFilter(${id},${i},this)">filtrer</button></th>`;
+  }
   if (!col.options) return `${cell}<input type="search" ${label} placeholder="filtrer" size="8" oninput="tableFilter(${id},${i},this.value)"></th>`;
   const opts = col.options.map((o, k) => `<option value="${k}">${esc(o) || '(vide)'}</option>`).join('');
   return `${cell}<select ${label} onchange="tableFilter(${id},${i},this.value)"><option value="">(tous)</option>${opts}</select></th>`;
@@ -92,12 +134,16 @@ function tableFilterCell(id, col, i){
 
 /* Drop-down list of the distinct values when there are few of them */
 function tableWithOptions(col, rows){
-  if (col.filter === false || col.filter === 'text') return col;
+  if (col.filter === false || col.filter === 'text' || col.filter === 'range') return col;
   const distinct = [...new Set(rows.map(r => tableText(col, r)))];
+  if (col.filter === 'checks') return {...col, values: distinct.toSorted(tableCompare)};
   return distinct.length <= TABLE_SELECT_MAX ? {...col, options: distinct.toSorted(tableCompare)} : col;
 }
 
-/* cols: [{label, value: row => sortable/filterable value, num?: right-aligned, sort?: false, filter?: false | 'text'}], row: row => '<tr>…</tr>'.
+/* cols: [{label, value: row => sortable/filterable value, num?: right-aligned, sort?: false,
+   clearButton?: true (the filter cell of this column holds the icon that clears the filters),
+   filter?: false | 'text' (contains) | 'range' (pop-up: min and max, either may be empty; input: 'date' for dates) | 'checks' (pop-up: check boxes of the values)}],
+   row: row => '<tr>…</tr>'.
    opt: {noun: what the rows are called in the counter, style: style of the scrolling container, footer: rows => '<tr>…</tr>' of a last line (totals)
    computed on the rows shown, so it follows the filters} */
 function dataTable(cols, rows, row, opt = {}){
@@ -105,8 +151,96 @@ function dataTable(cols, rows, row, opt = {}){
   const t = {cols: c, rows, row, noun: opt.noun || 'lignes', footer: opt.footer, filters: c.map(() => null), sort: null};
   tables.set(id, t);
   tables.delete(id - 50);  // the page only shows a few tables at a time: keep the registry bounded
+  const clearInRow = c.some(col => col.clearButton);   // else the button to clear the filters is next to the counter
+  const clearLine = clearInRow ? '' : ` <button type="button" class="clear-filters" id="tclr-${id}" hidden onclick="tableClearFilters(${id})">Effacer les filtres</button>`;
   const foot = opt.footer ? '<tfoot id="tf-' + id + '">' + opt.footer(rows) + '</tfoot>' : '';
   const head = c.map((col, i) => tableHeadCell(id, col, i)).join(''), filters = c.map((col, i) => tableFilterCell(id, col, i)).join('');
   return `<div class="scroll" style="${opt.style || ''}"><table class="data"><thead><tr>${head}</tr><tr class="filters">${filters}</tr></thead>` +
-    `<tbody id="tb-${id}">${rows.map(row).join('')}</tbody>${foot}</table></div><div class="mut" id="tc-${id}">${tableCount(t, rows.length)}</div>`;
+    `<tbody id="tb-${id}">${rows.map(row).join('')}</tbody>${foot}</table></div><div class="mut table-count"><span id="tc-${id}">${tableCount(t, rows.length)}</span>${clearLine}</div>`;
 }
+
+/* ------------------------------------------------------------ pop-up of the filters on a range or on a list of values */
+let filterPop = null;   // {id, i}: the filter being edited
+
+function tableClosePopup(){
+  filterPop = null;
+  const pop = $('#filter-pop');
+  pop.hidden = true;
+  pop.innerHTML = '';
+}
+
+function tableSetFilter(id, i, f){
+  const t = tables.get(id);
+  if (!t) return;
+  t.filters[i] = f;
+  tableRefresh(id);
+}
+
+function tableRangeForm(id, i, col, f){
+  const type = col.input === 'date' ? 'type="date"' : 'type="text" inputmode="decimal" size="8"', cur = f ?? {};
+  const field = (name, label, v) => `<input id="fp-${name}" ${type} value="${esc(v ?? '')}" aria-label="${label}" title="${label}">`;
+  return `<form onsubmit="tableApplyRange(${id},${i});return false" aria-label="Filtrer ${esc(col.label)}">
+    <div class="fp-values">Entre ${field('min', 'Min', cur.min)} Et ${field('max', 'Max', cur.max)}
+    <button type="button" class="fp-cancel" title="Annuler" aria-label="Annuler" onclick="tableClosePopup()">✕</button><button type="submit" class="fp-ok" title="Appliquer" aria-label="Appliquer">✓</button></div>
+    <div id="fp-err" class="err"></div></form>`;
+}
+
+function tableChecksForm(id, i, col, f){
+  const checked = v => f == null || f.includes(v);
+  const boxes = col.values.map((v, k) => `<label><input type="checkbox"${checked(v) ? ' checked' : ''} onchange="tableToggleValue(${id},${i},${k},this.checked)"> ${esc(v) || '(vide)'}</label>`).join('');
+  return `<b>${esc(col.label)}</b><div class="fp-buttons"><button type="button" onclick="tableClearFilter(${id},${i})">Tout</button><button type="button" onclick="tableSetChecks(${id},${i},[])">Aucun</button></div><div class="fp-list">${boxes}</div>`;
+}
+
+function tableOpenFilter(id, i, button){
+  const t = tables.get(id);
+  if (!t) return;
+  if (filterPop?.id === id && filterPop.i === i) { tableClosePopup(); return; }
+  const col = t.cols[i], pop = $('#filter-pop');
+  pop.innerHTML = col.filter === 'checks' ? tableChecksForm(id, i, col, t.filters[i]) : tableRangeForm(id, i, col, t.filters[i]);
+  filterPop = {id, i};
+  const box = button?.getBoundingClientRect?.();
+  if (box) { pop.style.top = box.bottom + 4 + 'px'; pop.style.left = Math.max(8, Math.min(box.left, window.innerWidth - 480)) + 'px'; }
+  pop.hidden = false;
+}
+
+function tableApplyRange(id, i){
+  const t = tables.get(id);
+  if (!t) return;
+  const isDate = t.cols[i].input === 'date';
+  const read = name => {   // null: no limit; undefined: not a valid value
+    const text = $('#fp-' + name).value.trim();
+    if (text === '') return null;
+    if (isDate) return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : undefined;
+    const n = Number(text.replaceAll(/\s/g, '').replace(',', '.'));
+    return Number.isNaN(n) ? undefined : n;
+  };
+  const min = read('min'), max = read('max');
+  if (min === undefined || max === undefined) { $('#fp-err').textContent = isDate ? 'Date invalide' : 'Valeur invalide'; return; }
+  tableSetFilter(id, i, min === null && max === null ? null : {min, max});   // both empty: no filter
+  tableClosePopup();
+}
+
+function tableClearFilter(id, i){
+  tableSetFilter(id, i, null);
+  tableClosePopup();
+}
+
+/* A value of a list is checked or unchecked: all of them checked means no filter */
+function tableToggleValue(id, i, k, on){
+  const t = tables.get(id);
+  if (!t) return;
+  const all = t.cols[i].values, now = new Set(t.filters[i] ?? all);
+  if (on) now.add(all[k]); else now.delete(all[k]);
+  tableSetFilter(id, i, now.size === all.length ? null : all.filter(v => now.has(v)));
+}
+
+function tableSetChecks(id, i, values){
+  tableSetFilter(id, i, values);
+  tableClosePopup();
+}
+
+window.addEventListener('keydown', e => { if (e.key === 'Escape' && filterPop) tableClosePopup(); });
+window.addEventListener('hashchange', () => { if (filterPop) tableClosePopup(); });
+window.addEventListener('click', e => {
+  if (filterPop && !e.target.closest?.('#filter-pop, .fbtn')) tableClosePopup();
+});
