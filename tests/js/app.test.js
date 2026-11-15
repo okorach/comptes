@@ -1039,7 +1039,7 @@ test('the patrimoine chart has the default height, and a button shows it 50 % ta
 test('duplicateIds finds the transactions with the same date, amount and description', () => {
   const {get} = load(), dup = get('duplicateIds');
   const t = (id, date, amount, description) => ({id, date, native_amount: amount, description});
-  const ids = dup([t(1, '2024-01-01', -10, 'Café'), t(2, '2024-01-01', -10, 'Café'), t(3, '2024-01-02', -10, 'Café'), t(4, '2024-01-01', -11, 'Café'),
+  const ids = dup([{...t(0, '2024-01-01', -10, 'Café'), not_duplicate: 1}, t(1, '2024-01-01', -10, 'Café'), t(2, '2024-01-01', -10, 'Café'), t(3, '2024-01-02', -10, 'Café'), t(4, '2024-01-01', -11, 'Café'),
     t(5, '2024-01-01', -10, 'Thé'), t(6, '2024-01-05', 5, 'x'), t(7, '2024-01-05', 5, ' x '), t(8, '2024-01-06', null, 'y'), t(9, '2024-01-06', null, 'y'),
     t(10, '2024-02-01', 0.1 + 0.2, 'z'), t(11, '2024-02-01', 0.3, 'z'), t(12, '2024-01-07', 1, 'a'), t(13, '2024-01-07', 1, 'a'), t(14, '2024-01-07', 1, 'a')]);
   assert.deepEqual([...ids].sort((a, b) => a - b), [1, 2, 6, 7, 10, 11, 12, 13, 14]);   // not the ones without amount; 3 of a kind all flagged
@@ -1052,7 +1052,32 @@ test('both rows of a potential duplicate get an orange bullet with a tooltip, le
   await settle();
   await ctx.account('X');
   const html = els['#main'].innerHTML;
-  const bullet = /<td class="n neg"><span class="stale-dot warn" role="img" title="Transaction potentiellement dupliquée"[^>]*><\/span>-5,00 €<\/td>/g;
-  assert.equal(html.match(bullet).length, 2);
+  const bullet = /<td class="n neg"><span class="dup" tabindex="0"><span class="stale-dot warn"[^>]*><\/span><span class="dup-pop">Transaction potentiellement doublon<button onclick="notDuplicate\((\d),'X'\)">Pas un doublon<\/button><\/span><\/span>-5,00 €<\/td>/g;
+  assert.deepEqual([...html.matchAll(bullet)].map(m => m[1]), ['1', '2']);
   assert.equal((html.match(/stale-dot/g) || []).length, 2);
+});
+
+test('a transaction acknowledged as not a duplicate is not flagged, nor is its twin', () => {
+  const {get} = load(), dup = get('duplicateIds');
+  const t = (id, extra = {}) => ({id, date: '2024-01-01', native_amount: -10, description: 'Café', ...extra});
+  assert.deepEqual([...dup([t(1, {not_duplicate: 1}), t(2)])], []);
+  assert.deepEqual([...dup([t(1, {not_duplicate: 1}), t(2), t(3)])].sort(), [2, 3]);
+});
+
+test('the button "Pas un doublon" records it on the server and reloads the account, without the bullet', async () => {
+  const calls = [];
+  let acked = false;
+  const tx = (id) => ({id, date: '2024-01-01', amount_main: -5, native_amount: -5, balance_main: 0, description: 'Café', in_budget: null, not_duplicate: acked && id === 1 ? 1 : 0});
+  const account = {account: {id: 'X', type: 'Courant', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []};
+  const {ctx, els} = load(async (url, init) => {
+    calls.push(init?.method ? init.method + ' ' + url : url);
+    if (init?.method === 'POST') { acked = true; return {json: async () => ({ok: true})}; }
+    return {json: async () => (url.includes('transactions') ? [tx(1), tx(2)] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR']} : account)};
+  });
+  await settle();
+  await ctx.account('X');
+  assert.equal((els['#main'].innerHTML.match(/class="dup"/g) || []).length, 2);
+  await ctx.notDuplicate(1, 'X');
+  assert.ok(calls.some(c => /^POST .*transaction\/1\/not_duplicate$/.test(c)), calls.join('|'));
+  assert.equal((els['#main'].innerHTML.match(/class="dup"/g) || []).length, 0);   // its twin is not flagged either
 });

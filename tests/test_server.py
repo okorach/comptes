@@ -56,6 +56,9 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(rows[0]["balance_main"], 90.0)
         self.call("PUT", f"/api/transaction/{tid}", {"date": "2024-02-01", "native_amount": "-20"})
         self.assertEqual(self.call("GET", acc + "/transactions?limit=1")[0]["balance_main"], 80.0)
+        self.assertEqual(rows[0]["not_duplicate"], 0)
+        self.assertTrue(self.call("POST", f"/api/transaction/{tid}/not_duplicate", {})["ok"])
+        self.assertEqual(self.call("GET", acc + "/transactions?limit=1")[0]["not_duplicate"], 1)
         self.call("DELETE", f"/api/transaction/{tid}")
         self.assertEqual(len(self.call("GET", acc + "/transactions?limit=10")), 1)
 

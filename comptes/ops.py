@@ -50,12 +50,20 @@ def update_transaction(con, tid, d):
     fx_cur, fx_amt, fx_auto = _original_amount(con, row["account"], d)
     con.execute(
         "UPDATE transactions SET date=?,native_amount=?,native_balance=?,description=?,subcategory=?,"
-        "in_budget=?,qty=?,price=?,fx_currency=?,fx_amount=?,fx_auto=? WHERE id=?",
+        "in_budget=?,qty=?,price=?,fx_currency=?,fx_amount=?,fx_auto=?,not_duplicate=0 WHERE id=?",
         (d["date"], _f(d.get("native_amount")), _f(d.get("native_balance")), d.get("description"),
          d.get("subcategory") or None, _f(d.get("in_budget")), _f(d.get("qty")), _f(d.get("price")), fx_cur, fx_amt, fx_auto, tid))
     calc.recompute_account(con, row["account"])
     con.commit()
     return True
+
+
+def set_not_duplicate(con: sqlite3.Connection, tid: int, value: bool = True) -> bool:
+    """Records that a transaction is not a duplicate of another one with the same date, amount and description
+    (it is then not flagged any more). Editing the transaction forgets it. False when the transaction does not exist."""
+    cur = con.execute("UPDATE transactions SET not_duplicate=? WHERE id=?", (1 if value else 0, tid))
+    con.commit()
+    return cur.rowcount > 0
 
 
 def delete_transaction(con, tid):
