@@ -265,10 +265,11 @@ function depositsPanel(info, a, cur){
   <div class="scroll" style="max-height:340px;max-width:460px;overflow-y:auto"><table>${info.deposits.map(d => depositRow(d, a.id)).join('')}</table></div></div>`;
 }
 const txColumns = (foreign, cur, hasFx, amounts = true) => [
-  {label: 'Date', value: t => t.date}, ...(amounts ? [{label: 'Montant ' + sym(MASTER), num: true, value: t => t.amount_main}] : []), {label: 'Solde ' + sym(MASTER), num: true, value: t => t.balance_main},
-  ...(foreign && amounts ? [{label: `Montant ${cur}`, num: true, value: t => t.native_amount}] : []), ...(foreign ? [{label: `Solde ${cur}`, num: true, value: t => t.native_balance}] : []),
+  {label: 'Date', filter: 'range', input: 'date', value: t => t.date}, ...(amounts ? [{label: 'Montant ' + sym(MASTER), num: true, filter: 'range', value: t => t.amount_main}] : []),
+  {label: 'Solde ' + sym(MASTER), num: true, filter: false, value: t => t.balance_main},
+  ...(foreign && amounts ? [{label: `Montant ${cur}`, num: true, filter: 'range', value: t => t.native_amount}] : []), ...(foreign ? [{label: `Solde ${cur}`, num: true, filter: false, value: t => t.native_balance}] : []),
   ...(hasFx ? [{label: "Montant d'origine", num: true, value: t => t.fx_amount}, {label: "Devise d'origine", value: t => t.fx_currency}] : []),
-  {label: 'Description', value: t => t.description}, {label: 'Sous-cat.', value: t => t.subcategory}, {label: '', sort: false, filter: false, value: () => null},
+  {label: 'Description', filter: 'text', value: t => t.description}, {label: 'Sous-cat.', filter: 'checks', value: t => t.subcategory}, {label: '', sort: false, filter: false, value: () => null},
 ];
 /* Input fields of an entry, depending on the way the balance of the account is kept */
 function modeFields(a, m, cur){

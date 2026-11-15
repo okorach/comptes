@@ -102,3 +102,7 @@ input,select{max-width:100%}
   .chart-range input{min-height:22px}
   nav a{padding:8px 0}
 }
+.data button.fbtn{width:100%;min-width:60px;max-width:180px;padding:2px 6px;font-size:12px;text-align:left;color:var(--mut)} .data button.fbtn.on{color:var(--acc);border-color:var(--acc);font-weight:500}
+#filter-pop{position:fixed;z-index:30;min-width:220px;max-width:min(320px,calc(100vw - 16px));padding:10px 12px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.2);font-size:13px}
+#filter-pop[hidden]{display:none} #filter-pop select,#filter-pop input{font-size:13px;max-width:100%} #filter-pop form{display:flex;flex-direction:column;gap:8px} #filter-pop .fp-values{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+#filter-pop .fp-buttons{display:flex;gap:8px;margin:6px 0} #filter-pop .fp-list{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto} #filter-pop .fp-list label{display:flex;align-items:center;gap:6px;cursor:pointer}
