@@ -137,7 +137,7 @@ const TX = [
 ];
 const TXCOLS = [
   {label: 'Date', filter: 'range', input: 'date', value: r => r.date}, {label: 'Montant', num: true, filter: 'range', value: r => r.amount},
-  {label: 'Solde', num: true, filter: false, value: () => 0}, {label: 'Description', filter: 'text', value: r => r.desc}, {label: 'Sous-cat.', filter: 'checks', value: r => r.sub},
+  {label: 'Solde', num: true, filter: false, value: () => 0}, {label: 'Description', filter: 'text', value: r => r.desc}, {label: 'Catégorie', filter: 'checks', value: r => r.sub},
 ];
 const apply = (env, id, i, min, max = '') => {   // opens the pop-up, fills the min and the max, submits
   env.ctx.tableOpenFilter(id, i, null);

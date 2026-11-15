@@ -76,6 +76,15 @@ class Handler(BaseHTTPRequestHandler):
                     "master_currency": calc.master_currency(con),
                     "number_format": calc.number_format(con),
                     "banks": [r[0] for r in con.execute("SELECT DISTINCT bank FROM accounts WHERE bank IS NOT NULL ORDER BY 1")]}
+        if path == "categories":
+            if m == "POST":
+                d = self._body(); ops.set_general_category(con, d.get("subcategory"), d.get("category")); return {"ok": True}
+            # every category in use or mapped, with its general category (None while it has none)
+            rows = con.execute(
+                "SELECT s.subcategory, c.category FROM (SELECT subcategory FROM categories UNION "
+                "SELECT DISTINCT subcategory FROM transactions WHERE subcategory IS NOT NULL AND subcategory<>'') s "
+                "LEFT JOIN categories c ON c.subcategory=s.subcategory ORDER BY s.subcategory").fetchall()
+            return [dict(r) for r in rows]
         if path == "search":
             return search.run(con, q)
         if path == "spending":

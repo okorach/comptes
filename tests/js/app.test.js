@@ -277,6 +277,27 @@ test('administration page lets the master currency be changed, and reloads every
   assert.match(els['#main'].innerHTML, /Devise principale modifiée/);
 });
 
+test('administration page: a table gives the general category of each category, saved when the field changes', async () => {
+  const calls = [];
+  let rows = [{subcategory: 'Courses', category: 'Alimentation'}, {subcategory: 'Paie', category: 'Salaire'}, {subcategory: 'Neuf', category: null}];
+  const {ctx, els, mk} = load(async (url, init) => {
+    calls.push({url, body: init?.body && JSON.parse(init.body)});
+    if (url.endsWith('/meta')) return {json: async () => ({categories: [], types: [], banks: [], currencies: ['EUR'], master_currency: 'EUR'})};
+    return {json: async () => (url.endsWith('/categories') ? rows : [])};
+  });
+  await settle();
+  await ctx.admin();
+  const html = els['#catmap'].innerHTML;
+  assert.match(html, /<th>Catégorie<\/th><th>Catégorie générale<\/th>/);
+  assert.match(html, /<td>Courses<\/td><td><input[^>]*value="Alimentation"[^>]*data-sub="Courses"/);
+  assert.match(html, /data-sub="Neuf"/);
+  assert.match(html, /<datalist id="generals"><option>Alimentation<\/option><option>Salaire<\/option><\/datalist>/);
+  rows = [{subcategory: 'Neuf', category: 'Divers'}];
+  await ctx.saveGeneralCategory({dataset: {sub: 'Neuf'}, value: 'Divers'});
+  assert.deepEqual(calls.find(c => c.url === '/api/categories' && c.body).body, {subcategory: 'Neuf', category: 'Divers'});
+  assert.match(els['#catmap'].innerHTML, /value="Divers"/);   // the table is read again
+});
+
 test('administration page shows the refusal of an unknown master currency', async () => {
   const {ctx, els, mk} = load(async url => ({json: async () => (url.endsWith('/meta') ? {categories: [], types: [], banks: [], currencies: ['EUR'], master_currency: 'EUR'} : url.endsWith('master_currency') ? {error: 'no FX rates for JPY'} : [])}));
   await settle();
@@ -470,7 +491,7 @@ test('the blocks by category and by period of the spending page are collapsible,
   await settle();
   await ctx.spending();
   const html = els['#main'].innerHTML;
-  assert.match(html, /<details class="pane"[^>]*><summary><h3>Par catégorie<\/h3><\/summary><table>[\s\S]*<\/table><\/details>/);
+  assert.match(html, /<details class="pane"[^>]*><summary><h3>Par catégorie générale<\/h3><\/summary><table>[\s\S]*<\/table><\/details>/);
   assert.match(html, /<details class="pane"[^>]*><summary><h3>Par période<\/h3><\/summary><div class="scroll"[\s\S]*<\/table><\/div><\/details>/);
   assert.doesNotMatch(html, /<details[^>]* open/);
 });
@@ -581,7 +602,7 @@ test('the transactions of Assurance Vie, PER, PERCO, PEA, Actions, PEE and Inves
     const {ctx, els} = typedPage(type);
     await ctx.account('X');
     const html = els['#main'].innerHTML;
-    assert.deepEqual(heads(html), ['Date', 'Solde €', 'Description', 'Sous-cat.'], type);
+    assert.deepEqual(heads(html), ['Date', 'Solde €', 'Description', 'Catégorie'], type);
     const row = html.match(/<tr id="tx-1">.*?<\/tr>/s)[0];
     assert.equal((row.match(/<td/g) || []).length, 5, type);   // date, balance, description, sub-category, buttons
   }
@@ -591,7 +612,7 @@ test('the other accounts keep their Montant columns', async () => {
   for (const type of ['Courant', 'Livret A', 'PEL']) {
     const {ctx, els} = typedPage(type);
     await ctx.account('X');
-    assert.deepEqual(heads(els['#main'].innerHTML), ['Date', 'Montant €', 'Solde €', 'Description', 'Sous-cat.'], type);
+    assert.deepEqual(heads(els['#main'].innerHTML), ['Date', 'Montant €', 'Solde €', 'Description', 'Catégorie'], type);
   }
 });
 
@@ -599,11 +620,11 @@ test('in a foreign currency, both the Montant columns are hidden and the balance
   const {ctx, els} = typedPage('Actions', 'CHF');
   await ctx.account('X');
   const html = els['#main'].innerHTML;
-  assert.deepEqual(heads(html), ['Date', 'Solde €', 'Solde CHF', 'Description', 'Sous-cat.']);
+  assert.deepEqual(heads(html), ['Date', 'Solde €', 'Solde CHF', 'Description', 'Catégorie']);
   assert.equal((html.match(/<tr id="tx-1">.*?<\/tr>/s)[0].match(/<td/g) || []).length, 6);
   const other = typedPage('Courant', 'CHF');
   await other.ctx.account('X');
-  assert.deepEqual(heads(other.els['#main'].innerHTML), ['Date', 'Montant €', 'Solde €', 'Montant CHF', 'Solde CHF', 'Description', 'Sous-cat.']);
+  assert.deepEqual(heads(other.els['#main'].innerHTML), ['Date', 'Montant €', 'Solde €', 'Montant CHF', 'Solde CHF', 'Description', 'Catégorie']);
 });
 
 test('the transaction rows have a pen and a trash icon instead of the words modifier and suppr.', async () => {

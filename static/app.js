@@ -154,14 +154,14 @@ async function spending(){
   $('#main').innerHTML = `<h2>Dépenses</h2>
   <div class="row"><label>Regroupement<select onchange="SP.group=this.value;spending()">${GROUPINGS.map(([v, l]) => `<option value="${v}" ${SP.group === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
   <label>Période<select onchange="SP.months=+this.value;spending()">${[[12, '12 mois'], [24, '24 mois'], [36, '3 ans'], [60, '5 ans'], [120, '10 ans'], [600, 'Tout']].map(([v, l]) => `<option value="${v}" ${SP.months === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
-  <div class="chips"><span class="mut">Catégories incluses :</span> ${chips}</div>
+  <div class="chips"><span class="mut">Catégories générales incluses :</span> ${chips}</div>
   <div class="mut" style="font-size:12px;margin:4px 0">Dépenses = −montant sur les comptes « en budget ». Les écritures avec un nombre N (&gt;1) dans « In Budget » sont lissées sur N mois.</div>
   ${drawChart(periods, [{name: 'Dépenses lissées', color: 'var(--acc)', type: 'bar', values: s.map(x => x.spread)}].concat(SP.group === 'month' ? [{name: 'Moyenne 12 mois', color: 'var(--neg)', type: 'line', values: s.map(x => x.avg12)}] : []), {xticks: 12, unit: sym(MASTER)})}
-  <div class="row" style="align-items:start">${paneStart('category', 'Par catégorie')}<table><tr><th>Catégorie</th><th class="n">Total</th><th class="n">%</th></tr>
+  <div class="row" style="align-items:start">${paneStart('category', 'Par catégorie générale')}<table><tr><th>Catégorie générale</th><th class="n">Total</th><th class="n">%</th></tr>
   ${r.categories.map(c => `<tr><td>${esc(c.category)}</td><td class="n ${cls(-c.total)}">${num(c.total)}</td><td class="n">${pct(c.pct)}</td></tr>`).join('')}</table></details>
   ${paneStart('period', 'Par période')}<div class="scroll" style="max-height:420px;overflow-y:auto"><table><tr><th>Période</th><th class="n">Lissées</th><th class="n">Brutes</th>${SP.group === 'month' ? '<th class="n">Moy. 12 mois</th>' : ''}</tr>
   ${s.slice().reverse().map(x => `<tr><td>${x.period}${incompleteBubble(x.period, SP.group)}</td><td class="n">${num(x.spread)}</td><td class="n">${num(x.raw)}</td>${avgCell(x)}</tr>`).join('')}</table></div></details></div>
-  <div class="title-row"><h3>Période × catégorie</h3><label>Regroupement<select id="matrixGroup" onchange="SP.matrixGroup=this.value;spending()">${GROUPINGS.map(([v, l]) => `<option value="${v}" ${SP.matrixGroup === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div><div class="scroll"><table><tr><th>Période</th>${cats.map(c => `<th class="n d">${esc(c)}</th>`).join('')}</tr>
+  <div class="title-row"><h3>Période × catégorie générale</h3><label>Regroupement<select id="matrixGroup" onchange="SP.matrixGroup=this.value;spending()">${GROUPINGS.map(([v, l]) => `<option value="${v}" ${SP.matrixGroup === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div><div class="scroll"><table><tr><th>Période</th>${cats.map(c => `<th class="n d">${esc(c)}</th>`).join('')}</tr>
   ${periods.slice().reverse().map(matrixRow).join('')}</table></div>`;
 }
 function toggleCat(c, included){
@@ -270,7 +270,7 @@ const txColumns = (foreign, cur, hasFx, amounts = true) => [
   {label: 'Solde ' + sym(MASTER), num: true, filter: false, value: t => t.balance_main},
   ...(foreign && amounts ? [{label: `Montant ${cur}`, num: true, filter: 'range', value: t => t.native_amount}] : []), ...(foreign ? [{label: `Solde ${cur}`, num: true, filter: false, value: t => t.native_balance}] : []),
   ...(hasFx ? [{label: "Montant d'origine", num: true, value: t => t.fx_amount}, {label: "Devise d'origine", value: t => t.fx_currency}] : []),
-  {label: 'Description', filter: 'text', value: t => t.description}, {label: 'Sous-cat.', filter: 'checks', value: t => t.subcategory}, {label: '', sort: false, filter: false, clearButton: true, value: () => null},
+  {label: 'Description', filter: 'text', value: t => t.description}, {label: 'Catégorie', filter: 'checks', value: t => t.subcategory}, {label: '', sort: false, filter: false, clearButton: true, value: () => null},
 ];
 /* Input fields of an entry, depending on the way the balance of the account is kept */
 function modeFields(a, cur){
@@ -302,7 +302,7 @@ async function account(id, msg = '', focus = null){
   ${importer}</div>
   <div id="imp"></div><div class="ok">${esc(msg)}</div>
   <div class="card"><b id="form_title">Nouvelle écriture</b><div class="row"><label>Date<input type="date" id="f_date" value="${new Date().toISOString().slice(0, 10)}"></label>${fields}
-  <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
+  <label>Description<input id="f_desc" size="34"></label><label>Catégorie<select id="f_sub">${subOpts}</select></label>
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
   <div class="account-grid ${hasDep ? '' : 'solo'}"><div class="g-tx">${dataTable(txColumns(foreign, sym(a.currency), hasFx, showsAmount(a)), tr, t => txRow(t, foreign, a.id, hasFx, showsAmount(a), duplicates), {noun: 'écritures'})}</div>
@@ -362,7 +362,7 @@ const searchColumns = (foreign, hasFx) => [
   {label: 'Date', value: t => t.date}, {label: 'Compte', value: t => t.account}, {label: 'Montant ' + sym(MASTER), num: true, value: t => t.amount_main},
   ...(foreign ? [{label: 'Montant du compte', num: true, value: t => t.currency === MASTER ? null : t.native_amount}] : []),
   ...(hasFx ? [{label: "Montant d'origine", num: true, value: t => t.fx_amount}, {label: "Devise d'origine", value: t => t.fx_currency}] : []),
-  {label: 'Description', value: t => t.description}, {label: 'Catégorie', value: t => t.category}, {label: 'Sous-cat.', value: t => t.subcategory},
+  {label: 'Description', value: t => t.description}, {label: 'Catégorie générale', value: t => t.category}, {label: 'Catégorie', value: t => t.subcategory},
   {label: '', sort: false, filter: false, value: () => null},
 ];
 const searchLink = t => `#/account/${enc(t.account)}/tx/${Number(t.id)}`;  // the transaction in the list of its account
@@ -382,8 +382,8 @@ async function searchPage(){
   const field = (id, label, extra = '') => `<label>${label}<input id="s_${id}" value="${esc(c[id] ?? '')}" ${extra}></label>`;
   const select = (id, label, values) => `<label>${label}<select id="s_${id}">${searchOptions(values, c[id])}</select></label>`;
   $('#main').innerHTML = `<h2>Recherche d'écritures</h2>
-  <form class="card" onsubmit="searchRun(); return false"><div class="row">${field('text', 'Texte', 'size="26" placeholder="description ou sous-catégorie"')}
-  ${select('account', 'Compte', accounts.map(a => a.id))}${select('category', 'Catégorie', categories)}${select('subcategory', 'Sous-catégorie', m.categories.map(x => x.subcategory).toSorted(tableCompare))}</div>
+  <form class="card" onsubmit="searchRun(); return false"><div class="row">${field('text', 'Texte', 'size="26" placeholder="description ou catégorie"')}
+  ${select('account', 'Compte', accounts.map(a => a.id))}${select('category', 'Catégorie générale', categories)}${select('subcategory', 'Catégorie', m.categories.map(x => x.subcategory).toSorted(tableCompare))}</div>
   <div class="row">${field('date_from', 'Date du', 'type="date"')}${field('date_to', 'au', 'type="date"')}${field('amount_min', 'Montant de', 'size="9" inputmode="decimal"')}${field('amount_max', 'à', 'size="9" inputmode="decimal"')}
   <button class="primary" type="submit">Rechercher</button><button type="button" onclick="searchClear()">Effacer</button></div>
   <div class="mut" style="font-size:12px">Tous les critères renseignés doivent être satisfaits. Le texte cherche chaque mot (sans tenir compte des accents ni des majuscules). Le montant est en valeur absolue : en ${esc(MASTER)}, dans la devise du compte ou dans la devise d'origine.</div>
@@ -455,9 +455,27 @@ async function admin(msg = ''){
   <label>Date<input type="date" id="x_date" value="${new Date().toISOString().slice(0, 10)}"></label><label>Taux<input id="x_rate" size="8"></label><button onclick="addFx()">Ajouter</button></div>
   <div class="row"><button onclick="refreshRates()">Mettre à jour depuis Internet</button><span id="fx_status" class="mut"></span></div>
   <div class="mut" style="font-size:12px">Un taux par semaine (taux de référence de la BCE, via frankfurter.dev), depuis la plus ancienne donnée de chaque devise. Les semaines qui ont déjà un taux ne sont pas modifiées. Mise à jour automatique au démarrage de l'application si Internet est disponible ; les soldes sont alors recalculés.</div>
-  <div id="fxl"></div></div>`;
+  <div id="fxl"></div></div>
+  <div class="card"><b>Catégories</b> <span class="mut">(catégorie générale de chaque catégorie)</span><div id="cat_err" class="err"></div><div id="catmap"></div>
+  <div class="mut" style="font-size:12px">Une catégorie générale vide : la catégorie n'a pas de catégorie générale (« (sans catégorie) » dans les dépenses). La modification est enregistrée en quittant le champ.</div></div>`;
   numberFormatPreview();
-  await fxList();
+  await Promise.all([fxList(), categoryMapping()]);
+}
+/* the table of the general category of every category */
+async function categoryMapping(){
+  const rows = await api('categories'), generals = [...new Set(rows.map(r => r.category).filter(Boolean))].toSorted(tableCompare);
+  const line = r => `<tr><td>${esc(r.subcategory)}</td><td><input class="cat-general" list="generals" size="24" value="${esc(r.category ?? '')}" data-sub="${esc(r.subcategory)}" aria-label="Catégorie générale de ${esc(r.subcategory)}" onchange="saveGeneralCategory(this)"></td></tr>`;
+  const options = generals.map(g => '<option>' + esc(g) + '</option>').join('');
+  $('#catmap').innerHTML = `<datalist id="generals">${options}</datalist>
+    <table><tr><th>Catégorie</th><th>Catégorie générale</th></tr>${rows.map(line).join('')}</table>`;
+}
+async function saveGeneralCategory(input){
+  try {
+    await api('categories', 'POST', {subcategory: input.dataset.sub, category: input.value});
+    META = null;
+    $('#cat_err').textContent = '';
+    await categoryMapping();
+  } catch (e) { $('#cat_err').textContent = e.message; }
 }
 async function setMaster(){
   try {
