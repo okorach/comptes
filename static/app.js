@@ -195,10 +195,22 @@ let FOCUS = null;  // transaction to show (highlighted) in the account page: the
 /* Accounts whose transactions are shown without the « Montant » columns (the balance is what matters, the amounts are the movements of the market) */
 const NO_AMOUNT_TYPES = new Set(['Assurance Vie', 'PER', 'PERCO', 'PEA', 'Actions', 'PEE', 'Investment']);
 const showsAmount = a => !NO_AMOUNT_TYPES.has(a.type);
-function txRow(t, foreign, aid, hasFx = false, amounts = true){
+/* Ids of the transactions that have the same date, the same amount and the same description as another one of the list */
+function duplicateIds(transactions){
+  const groups = new Map();
+  for (const t of transactions) {
+    if (t.native_amount === null || t.native_amount === undefined) continue;
+    const key = JSON.stringify([t.date, Math.round(t.native_amount * 100), (t.description ?? '').trim()]);
+    groups.set(key, [...(groups.get(key) ?? []), t.id]);
+  }
+  return new Set([...groups.values()].filter(ids => ids.length > 1).flat());
+}
+const DUPLICATE_TEXT = 'Transaction potentiellement dupliquée';
+function txRow(t, foreign, aid, hasFx = false, amounts = true, duplicates = new Set()){
   const nativeAmount = foreign && amounts ? `<td class="n mut">${num(t.native_amount, '')}</td>` : '';
   const native = foreign ? nativeAmount + `<td class="n mut">${num(t.native_balance, '')}</td>` : '';
-  const amount = amounts ? `<td class="n ${cls(t.amount_main)}">${num(t.amount_main)}</td>` : '';
+  const flag = duplicates.has(t.id) ? bubble(true, DUPLICATE_TEXT) : '';   // orange bullet left of the amount
+  const amount = amounts ? `<td class="n ${cls(t.amount_main)}">${flag}${num(t.amount_main)}</td>` : '';
   const origin = hasFx ? `<td class="n mut">${num(t.fx_amount, '')}</td><td>${esc(t.fx_currency)}</td>` : '';
   const edit = `editTx(${esc(JSON.stringify(t))})`, del = `delTx(${Number(t.id)},'${jsq(aid)}')`;
   const budget = t.in_budget ? ` <span class="mut">(${esc(t.in_budget)})</span>` : '';
@@ -269,7 +281,7 @@ async function account(id, msg = '', focus = null){
   const a = info.account, cur = esc(sym(a.currency)), foreign = a.currency !== MASTER;
   const hasDep = !['Courant', 'Autres', null].includes(a.type);
   const bank = a.bank || '';
-  const hasFx = tr.some(t => t.fx_currency);
+  const hasFx = tr.some(t => t.fx_currency), duplicates = duplicateIds(tr);
   const subOpts = '<option value=""></option>' + m.categories.map(c => `<option>${esc(c.subcategory)}</option>`).join('');
   const fields = modeFields(a, m, cur);
   const importBanks = ['BoursoBank', 'ING', 'LCL', 'UBS', 'Revolut', 'Yuh', 'generic'];
@@ -286,7 +298,7 @@ async function account(id, msg = '', focus = null){
   <label>Description<input id="f_desc" size="34"></label><label>Sous-catégorie<select id="f_sub">${subOpts}</select></label>
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
-  <div class="account-grid ${hasDep ? '' : 'solo'}"><div class="g-tx">${dataTable(txColumns(foreign, sym(a.currency), hasFx, showsAmount(a)), tr, t => txRow(t, foreign, a.id, hasFx, showsAmount(a)), {noun: 'écritures'})}</div>
+  <div class="account-grid ${hasDep ? '' : 'solo'}"><div class="g-tx">${dataTable(txColumns(foreign, sym(a.currency), hasFx, showsAmount(a)), tr, t => txRow(t, foreign, a.id, hasFx, showsAmount(a), duplicates), {noun: 'écritures'})}</div>
   ${hasDep ? yieldsPanel(info, a) + depositsPanel(info, a, cur) : ''}</div>`;
   EDIT = null;
   $('#tx-' + focus)?.scrollIntoView?.({block: 'center'});
