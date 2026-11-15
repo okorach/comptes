@@ -295,7 +295,7 @@ async function account(id, msg = '', focus = null){
   const fields = modeFields(a, m, cur);
   const bankOptions = (info.import_formats ?? []).map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('');
   // the format of the file follows the bank of the account; the selector is only for a bank whose export we cannot read
-  const formatSelect = info.import_format ? '' : `<select id="imp_bank" title="Format du fichier">${bankOptions}</select>`;
+  const formatSelect = info.import_format || !bankOptions ? '' : `<select id="imp_bank" title="Format du fichier">${bankOptions}</select>`;
   const importer = a.mode === 'flow' || a.mode === 'static'  // only the accounts that take amounts can import them
     ? `<label class="inline">Importer ${formatSelect}<input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : '';
   $('#main').innerHTML = `<h2><span class="d">${esc(a.id)}</span> <span class="mut d" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>

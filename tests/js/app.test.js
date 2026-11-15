@@ -1091,6 +1091,11 @@ test('the import has no format selector when the bank of the account is known, e
   await known.ctx.account('X');
   assert.doesNotMatch(known.els['#main'].innerHTML, /imp_bank/);
   assert.match(known.els['#main'].innerHTML, /id="imp_file"/);
+  const none = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR']}
+    : {account: {id: 'X', type: 'Courant', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []})}));   // an older server: no format at all
+  await settle();
+  await none.ctx.account('X');
+  assert.doesNotMatch(none.els['#main'].innerHTML, /imp_bank/);                  // never an empty selector
   const unknown = page(null);
   await settle();
   await unknown.ctx.account('X');
