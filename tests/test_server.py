@@ -103,6 +103,26 @@ class ServerTest(unittest.TestCase):
         self.assertIsNone({r["subcategory"]: r["category"] for r in self.call("GET", "/api/categories")}.get("Courses"))
         self.assertEqual(self.call("POST", "/api/categories", {"subcategory": " ", "category": "x"})["HTTP"], 400)
         self.call("POST", "/api/categories", {"subcategory": "Courses", "category": "Alimentation"})   # as it was
+        self._check_delete_category()
+
+    def _check_delete_category(self):
+        rows = {r["subcategory"]: r for r in self.call("GET", "/api/categories")}
+        self.assertEqual(rows["Loisirs"]["used"], 0)
+        self.assertEqual(self.call("POST", "/api/categories", {"subcategory": "Neuve", "category": "Divers"}), {"ok": True})
+        self.assertEqual(self.call("POST", "/api/categories/delete", {"subcategory": "Neuve"}), {"moved": 0})   # unused: no replacement
+        self.assertNotIn("Neuve", [r["subcategory"] for r in self.call("GET", "/api/categories")])
+        tid = self.call("POST", "/api/account/Courant/transactions", {"date": "2024-05-01", "native_amount": "-5", "subcategory": "Paie"})["id"]
+        self.call("PUT", "/api/account/Epargne", {"default_category": "Paie"})
+        used = {r["subcategory"]: r["used"] for r in self.call("GET", "/api/categories")}["Paie"]
+        self.assertGreaterEqual(used, 2)                                                      # a transaction and an account
+        self.assertEqual(self.call("POST", "/api/categories/delete", {"subcategory": "Paie"})["HTTP"], 400)   # in use: a replacement is needed
+        self.assertEqual(self.call("POST", "/api/categories/delete", {"subcategory": "Paie", "replacement": "Paie"})["HTTP"], 400)
+        self.assertEqual(self.call("POST", "/api/categories/delete", {"subcategory": "Paie", "replacement": "Courses"})["moved"], used)
+        self.assertNotIn("Paie", [r["subcategory"] for r in self.call("GET", "/api/categories")])
+        self.assertEqual(self.call("GET", "/api/account/Epargne")["account"]["default_category"], "Courses")
+        self.assertEqual(self.con.execute("SELECT subcategory FROM transactions WHERE id=?", (tid,)).fetchone()[0], "Courses")
+        self.call("PUT", "/api/account/Epargne", {"default_category": ""})
+        self.call("DELETE", f"/api/transaction/{tid}")   # as it was
 
     def test_default_category_of_an_account(self):
         self.assertEqual(self.call("PUT", "/api/account/Courant", {"default_category": "Courses"}), {"ok": True})

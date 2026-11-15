@@ -289,7 +289,7 @@ async function account(id, msg = '', focus = null){
   const hasDep = !['Courant', 'Autres', null].includes(a.type);
   const bank = a.bank || '';
   const hasFx = tr.some(t => t.fx_currency), duplicates = duplicateIds(tr);
-  const categoryOptions = chosen => '<option value=""></option>' + m.categories.map(c => `<option${c.subcategory === chosen ? ' selected' : ''}>${esc(c.subcategory)}</option>`).join('');
+  const categoryOptions = chosen => '<option value=""></option>' + m.categories.toSorted((a, b) => tableCompare(a.subcategory, b.subcategory)).map(c => `<option${c.subcategory === chosen ? ' selected' : ''}>${esc(c.subcategory)}</option>`).join('');
   const fixed = a.default_category || '';   // a default category: all the transactions are in it, the column and the field of the form are not needed
   const categoryField = fixed ? '' : `<label>Catégorie<select id="f_sub">${categoryOptions('')}</select></label>`;
   const fields = modeFields(a, cur);
@@ -465,18 +465,53 @@ async function admin(msg = ''){
   <label>Séparateur des milliers<input id="nf_th" size="3" value="${esc(f.thousands)}" placeholder="aucun" autocomplete="off" oninput="numberFormatPreview()"></label>
   <span class="mut">Aperçu : <b class="d" id="nf_preview"></b></span><button onclick="setNumberFormatting()">Appliquer</button></div><div id="nf_err" class="err"></div>
   <div class="mut" style="font-size:12px">Séparateur des milliers : laisser vide pour aucun, ou saisir un seul caractère (espace, apostrophe, point, virgule…), différent du séparateur décimal.</div></div>
-  <div class="card"><b>Catégories</b> <span class="mut">(catégorie générale de chaque catégorie)</span><div id="cat_err" class="err"></div><div id="catmap"></div>
+  <div class="card"><b>Catégories</b> <span class="mut">(catégorie générale de chaque catégorie)</span> <button onclick="addCategory()">Ajouter une catégorie</button><div id="cat_err" class="err"></div><div id="catmap"></div>
   <div class="mut" style="font-size:12px">Une catégorie générale vide : la catégorie n'a pas de catégorie générale (« (sans catégorie) » dans les dépenses). La modification est enregistrée en quittant le champ.</div></div>`;
   numberFormatPreview();
   await Promise.all([fxList(), categoryMapping()]);
 }
 /* the table of the general category of every category */
+let CATEGORIES = [];   // the categories of the administration table: {subcategory, category, used}
 async function categoryMapping(){
-  const rows = await api('categories'), generals = [...new Set(rows.map(r => r.category).filter(Boolean))].toSorted(tableCompare);
-  const line = r => `<tr><td>${esc(r.subcategory)}</td><td><input class="cat-general" list="generals" size="24" value="${esc(r.category ?? '')}" data-sub="${esc(r.subcategory)}" aria-label="Catégorie générale de ${esc(r.subcategory)}" onchange="saveGeneralCategory(this)"></td></tr>`;
+  const rows = CATEGORIES = (await api('categories')).toSorted((a, b) => tableCompare(a.subcategory, b.subcategory)), generals = [...new Set(rows.map(r => r.category).filter(Boolean))].toSorted(tableCompare);
+  const remove = r => iconButton('trash', 'Supprimer la catégorie', 'removeCategory(this.dataset.sub)', 'data-sub="' + esc(r.subcategory) + '"');
+  const line = r => `<tr><td>${esc(r.subcategory)}</td><td><input class="cat-general" list="generals" size="24" value="${esc(r.category ?? '')}" data-sub="${esc(r.subcategory)}" aria-label="Catégorie générale de ${esc(r.subcategory)}" onchange="saveGeneralCategory(this)"></td><td class="s actions">${remove(r)}</td></tr>`;
   const options = generals.map(g => '<option>' + esc(g) + '</option>').join('');
   $('#catmap').innerHTML = `<datalist id="generals">${options}</datalist>
-    <table><tr><th>Catégorie</th><th>Catégorie générale</th></tr>${rows.map(line).join('')}</table>`;
+    <table><tr><th>Catégorie</th><th>Catégorie générale</th><th></th></tr>${rows.map(line).join('')}</table>`;
+}
+const NO_CATEGORY = '(sans catégorie)';
+/* Removes a category; the transactions in it (and the accounts that have it as default category) go to a replacement category asked to the user */
+async function removeCategory(name){
+  const row = CATEGORIES.find(c => c.subcategory === name), body = {subcategory: name};
+  if (row?.used) {
+    const others = CATEGORIES.map(c => c.subcategory).filter(c => c !== name).toSorted(tableCompare);
+    const options = [...others.map(c => ({value: c, label: c})), {value: '', label: NO_CATEGORY}];
+    const answer = await formDialog({title: 'Supprimer la catégorie ?', tone: 'danger', confirmLabel: 'Supprimer',
+      message: `« ${name} » est utilisée (${row.used}). Choisissez la catégorie qui la remplace :`, fields: [{name: 'replacement', label: 'Catégorie de remplacement', options}]});
+    if (!answer) return;
+    body.replacement = answer.replacement;
+  }
+  try {
+    await api('categories/delete', 'POST', body);
+    META = null;
+    $('#cat_err').textContent = '';
+    await categoryMapping();
+  } catch (e) { $('#cat_err').textContent = e.message; }
+}
+/* Adds a category, with the general category it belongs to (asked at the same time) */
+async function addCategory(){
+  const generals = [...new Set(CATEGORIES.map(r => r.category).filter(Boolean))].toSorted(tableCompare);
+  const answer = await formDialog({title: 'Nouvelle catégorie', message: 'Saisissez la catégorie et la catégorie générale à laquelle elle appartient.', confirmLabel: 'Ajouter',
+    fields: [{name: 'name', label: 'Catégorie', required: true}, {name: 'general', label: 'Catégorie générale', list: generals, required: true}]});
+  if (!answer) return;
+  if (CATEGORIES.some(c => c.subcategory.toLowerCase() === answer.name.toLowerCase())) return errorDialog('La catégorie « ' + answer.name + ' » existe déjà.');
+  try {
+    await api('categories', 'POST', {subcategory: answer.name, category: answer.general});
+    META = null;
+    $('#cat_err').textContent = '';
+    await categoryMapping();
+  } catch (e) { $('#cat_err').textContent = e.message; }
 }
 async function saveGeneralCategory(input){
   try {

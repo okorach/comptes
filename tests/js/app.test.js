@@ -712,6 +712,89 @@ const writes = calls => calls.filter(c => c.method !== 'GET').map(c => c.method 
 const shown = els => (els['#guard'] || {innerHTML: ''}).innerHTML;
 const tick = () => new Promise(r => setTimeout(r, 0));
 
+/* ---------------------------------------------------------------- categories of the administration page */
+const categoryPage = (calls, rows) => load(async (url, init) => {
+  calls.push({url, method: init?.method || 'GET', body: init?.body && JSON.parse(init.body)});
+  if (url.endsWith('/meta')) return {json: async () => ({categories: [], types: [], banks: [], currencies: ['EUR'], master_currency: 'EUR'})};
+  return {json: async () => (url.endsWith('/categories') ? rows : [])};
+});
+const CATEGORY_ROWS = [{subcategory: 'Courses', category: 'Alimentation', used: 12}, {subcategory: 'Neuve', category: 'Divers', used: 0}, {subcategory: 'Paie', category: 'Salaire', used: 3}];
+
+test('the categories table has a remove button for each category and a button to add one', async () => {
+  const {ctx, els} = categoryPage([], CATEGORY_ROWS);
+  await settle();
+  await ctx.admin();
+  assert.equal((els['#catmap'].innerHTML.match(/title="Supprimer la catégorie"/g) || []).length, 3);
+  assert.match(els['#catmap'].innerHTML, /data-sub="Neuve"[^>]*onclick="removeCategory\(this\.dataset\.sub\)"/);
+  assert.match(els['#main'].innerHTML, /onclick="addCategory\(\)">Ajouter une catégorie<\/button>/);
+});
+
+test('the categories are in alphabetical order, whatever the case and the accents', async () => {
+  const rows = ['zèbre', 'Banque', 'alpha', 'Épargne', 'Charges'].map(subcategory => ({subcategory, category: 'X', used: 0}));
+  const {ctx, els} = categoryPage([], rows);
+  await settle();
+  await ctx.admin();
+  assert.deepEqual([...els['#catmap'].innerHTML.matchAll(/<tr><td>([^<]*)<\/td>/g)].map(x => x[1]), ['alpha', 'Banque', 'Charges', 'Épargne', 'zèbre']);
+});
+
+test('removing a category nobody uses needs no confirmation', async () => {
+  const calls = [];
+  const {ctx, els} = categoryPage(calls, CATEGORY_ROWS);
+  await settle();
+  await ctx.admin();
+  await ctx.removeCategory('Neuve');
+  assert.equal(shown(els), '');                                                           // no window
+  assert.deepEqual(calls.find(c => c.url.endsWith('categories/delete')).body, {subcategory: 'Neuve'});
+});
+
+test('removing a category in use asks for the replacement category among the others, and nothing happens if cancelled', async () => {
+  const calls = [];
+  const {ctx, els, get, mk} = categoryPage(calls, CATEGORY_ROWS);
+  await settle();
+  await ctx.admin();
+  let done = ctx.removeCategory('Courses');
+  await tick();
+  const html = shown(els);
+  assert.match(html, /« Courses » est utilisée \(12\)/);
+  assert.match(html, /<select id="m_f_replacement"><option value="Neuve">Neuve<\/option><option value="Paie">Paie<\/option><option value="">\(sans catégorie\)<\/option><\/select>/);
+  get('modalDone')(false);
+  await done;
+  assert.equal(calls.some(c => c.url.endsWith('categories/delete')), false);
+  done = ctx.removeCategory('Courses');
+  await tick();
+  mk('#m_f_replacement').value = 'Paie';
+  get('modalDone')(true);
+  await done;
+  assert.deepEqual(calls.find(c => c.url.endsWith('categories/delete')).body, {subcategory: 'Courses', replacement: 'Paie'});
+});
+
+test('adding a category asks for its general category in the same window; both are required; an existing name is refused', async () => {
+  const calls = [];
+  const {ctx, els, get, mk} = categoryPage(calls, CATEGORY_ROWS);
+  await settle();
+  await ctx.admin();
+  let done = ctx.addCategory();
+  await tick();
+  const html = shown(els);
+  assert.match(html, /<h2 id="m_title">Nouvelle catégorie<\/h2>/);
+  assert.match(html, /Catégorie<input id="m_f_name"[\s\S]*Catégorie générale<input id="m_f_general"[^>]*list="m_f_general_list"><datalist id="m_f_general_list"><option>Alimentation<\/option><option>Divers<\/option><option>Salaire<\/option>/);
+  mk('#m_f_name').value = 'Voyages'; mk('#m_f_general').value = '';
+  get('modalDone')(true);                                                                 // the general category is missing: the window stays
+  assert.match(shown(els), /Nouvelle catégorie/);
+  mk('#m_f_general').value = ' Loisirs ';
+  get('modalDone')(true);
+  await done;
+  assert.deepEqual(calls.find(c => c.method === 'POST' && c.url.endsWith('/categories')).body, {subcategory: 'Voyages', category: 'Loisirs'});
+  done = ctx.addCategory();
+  await tick();
+  mk('#m_f_name').value = 'courses'; mk('#m_f_general').value = 'X';
+  get('modalDone')(true);
+  await tick();
+  assert.match(shown(els), /La catégorie « courses » existe déjà/);
+  get('modalDone')(true);                                                                 // closes the error window
+  await done;
+});
+
 test('the closing button asks to close the account', async () => {
   const {ctx, els} = guardedPage();
   await ctx.account('Livret A');

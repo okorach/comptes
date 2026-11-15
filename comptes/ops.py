@@ -156,6 +156,31 @@ def set_default_category(con: sqlite3.Connection, acc: str, category: str | None
     con.commit()
 
 
+def category_usage(con: sqlite3.Connection, subcategory: str) -> int:
+    """Number of transactions in a category, plus the accounts that have it as default category"""
+    return (con.execute("SELECT COUNT(*) FROM transactions WHERE subcategory=?", (subcategory,)).fetchone()[0]
+            + con.execute("SELECT COUNT(*) FROM accounts WHERE default_category=?", (subcategory,)).fetchone()[0])
+
+
+def delete_category(con: sqlite3.Connection, subcategory: str, replacement: str | None = None) -> int:
+    """Removes a category. What is in it (transactions, default category of accounts) moves to the replacement category (empty: no
+    category); a category in use needs the replacement to be given explicitly (ValueError if it is None or the category itself).
+    Returns the number of transactions and accounts that moved."""
+    sub = (subcategory or "").strip()
+    used = category_usage(con, sub)
+    new = (replacement or "").strip() or None
+    if used and replacement is None:
+        raise ValueError("Catégorie de remplacement requise")
+    if new == sub:
+        raise ValueError("La catégorie de remplacement doit être différente")
+    if used:
+        con.execute("UPDATE transactions SET subcategory=? WHERE subcategory=?", (new, sub))
+        con.execute("UPDATE accounts SET default_category=? WHERE default_category=?", (new, sub))
+    con.execute("DELETE FROM categories WHERE subcategory=?", (sub,))
+    con.commit()
+    return used
+
+
 def set_general_category(con: sqlite3.Connection, subcategory: str, category: str) -> None:
     """Maps a category (the sub-category of the transactions) to a general category; an empty general category removes the mapping."""
     sub = (subcategory or "").strip()
