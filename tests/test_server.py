@@ -103,8 +103,9 @@ class ServerTest(unittest.TestCase):
         self.assertIsNone({r["subcategory"]: r["category"] for r in self.call("GET", "/api/categories")}.get("Courses"))
         self.assertEqual(self.call("POST", "/api/categories", {"subcategory": " ", "category": "x"})["HTTP"], 400)
         self.call("POST", "/api/categories", {"subcategory": "Courses", "category": "Alimentation"})   # as it was
+        self._check_delete_category()
 
-    def test_delete_a_category(self):
+    def _check_delete_category(self):
         rows = {r["subcategory"]: r for r in self.call("GET", "/api/categories")}
         self.assertEqual(rows["Loisirs"]["used"], 0)
         self.assertEqual(self.call("POST", "/api/categories", {"subcategory": "Neuve", "category": "Divers"}), {"ok": True})
