@@ -148,6 +148,18 @@ def create_account(con, d):
     con.commit()
 
 
+def delete_account(con: sqlite3.Connection, acc: str) -> dict:
+    """Deletes an account with its transactions, deposits and yields. Returns what was deleted. ValueError for an unknown account."""
+    if not con.execute("SELECT 1 FROM accounts WHERE id=?", (acc,)).fetchone():
+        raise ValueError("compte inconnu")
+    deleted = {}
+    for table in ("transactions", "deposits", "interests"):
+        deleted[table] = con.execute(f"DELETE FROM {table} WHERE account=?", (acc,)).rowcount
+    con.execute("DELETE FROM accounts WHERE id=?", (acc,))
+    con.commit()
+    return deleted
+
+
 def set_status(con: sqlite3.Connection, acc: str, status: str) -> None:
     """Opens or closes an account. An account can only be closed when its balance is zero (ValueError otherwise)."""
     if status == "Closed":
