@@ -80,9 +80,10 @@ class ServerTest(unittest.TestCase):
         self.call("POST", acc + "/transactions", {"date": "2030-03-02", "fx_currency": "USD", "fx_amount": "-100", "description": "US"})
         with urllib.request.urlopen(self.base + acc + "/export.csv") as r:
             lines = r.read().decode("utf-8").splitlines()
-        # date, amount in CHF, balance (depends on the other tests), description, subcategory, original currency, original amount
+        # date, amount in CHF, balance (depends on the other tests), description, subcategory, original currency, original amount, ...
         rows = [line.split(",") for line in lines[1:] if "2030-03" in line]
-        self.assertEqual([r[:2] + r[3:] for r in rows], [["2030-03-01", "1000.0", "CHF", "", "", ""], ["2030-03-02", "-160.0", "US", "", "USD", "-100.0"]])
+        self.assertEqual([r[:2] + r[3:] for r in rows], [["2030-03-01", "1000.0", "CHF", "", "", "", "", "", ""],
+                                                           ["2030-03-02", "-160.0", "US", "", "USD", "-100.0", "", "", ""]])   # + shares, price, smoothing
 
     def test_master_currency(self):
         self.assertEqual(self.call("GET", "/api/meta")["master_currency"], "EUR")

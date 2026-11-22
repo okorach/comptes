@@ -885,6 +885,58 @@ test('a share account entry form: the number of shares is the one of the previou
   assert.doesNotMatch(plain.els['#main'].innerHTML, /placeholder="automatique"/);
 });
 
+test('deleting an account: a first confirmation, the CSV export, a second confirmation with the name of the account, and only then the deletion', async () => {
+  const calls = [], downloads = [];
+  const {ctx, els, mk, get} = guardedPage(calls);
+  ctx.location.assign = url => { downloads.push(url); calls.push({url, method: 'DOWNLOAD'}); };
+  await ctx.account('Livret A');
+  assert.match(els['#main'].innerHTML, /<button class="danger" onclick="askDeleteAccount\('Livret A'\)">Supprimer le compte<\/button>/);
+  let done = ctx.askDeleteAccount('Livret A');
+  await tick();
+  assert.match(shown(els), /Supprimer le compte \?[\s\S]*0 écritures[\s\S]*exportées en CSV[\s\S]*<div class="modal-name d">Livret A<\/div>/);
+  get('modalDone')(false);                                                                  // cancelled at the first confirmation
+  await done;
+  assert.deepEqual(downloads, []);
+  assert.equal(writes(calls).length, 0);
+  done = ctx.askDeleteAccount('Livret A');
+  await tick();
+  get('modalDone')(true);                                                                   // first confirmation: the export starts
+  await tick();
+  assert.deepEqual(downloads, ['/api/account/Livret%20A/export.csv']);
+  assert.match(shown(els), /Dernière confirmation[\s\S]*conservez-le[\s\S]*id="m_input"/);
+  assert.equal(writes(calls).filter(w => w.startsWith('DELETE')).length, 0);                // nothing deleted yet
+  mk('#m_input').value = 'Livret';
+  get('modalCheck')();
+  get('modalDone')(true);                                                                   // the name is not typed: nothing happens
+  assert.equal(writes(calls).filter(w => w.startsWith('DELETE')).length, 0);
+  mk('#m_input').value = 'Livret A';
+  get('modalCheck')();
+  get('modalDone')(true);
+  await done;
+  assert.ok(writes(calls).includes('DELETE /api/account/Livret%20A'));
+  assert.equal(ctx.location.hash, '#/');                                                     // back to the overview
+});
+
+test('the refusal of the server to delete an account is shown', async () => {
+  const {ctx, els, mk, get} = load(async (url, init) => {
+    if (init?.method === 'DELETE') return {json: async () => ({error: "Exportez d'abord les écritures du compte en CSV"})};
+    return {json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR'}
+      : {account: {id: 'X', type: 'Livret', bank: 'B', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: []})};
+  });
+  ctx.location.assign = () => {};
+  await ctx.account('X');
+  const done = ctx.askDeleteAccount('X');
+  await tick();
+  get('modalDone')(true);
+  await tick();
+  mk('#m_input').value = 'X'; get('modalCheck')(); get('modalDone')(true);
+  await tick();
+  assert.match(shown(els), /Suppression impossible[\s\S]*Exportez d'abord/);
+  get('modalDone')(true);
+  await done;
+  assert.notEqual(ctx.location.hash, '#/');                                                  // still on the account
+});
+
 test('the closing button asks to close the account', async () => {
   const {ctx, els} = guardedPage();
   await ctx.account('Livret A');

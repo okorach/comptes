@@ -284,7 +284,7 @@ function modeFields(a, cur, lastQty = ''){
   // one amount, in the currency of the account (its conversion to the currency of the application is computed by the server)
   return `<label>Montant (${cur})<input id="f_amt" size="12"></label>`;
 }
-let EDIT = null, EDIT_FX = {}, EDIT_SUB = null, LAST_QTY = '', ENTRY_MODE = null;   // EDIT_FX: the original amount of the transaction being edited (entered before, or by an import), kept as it is
+let EDIT = null, EDIT_FX = {}, EDIT_SUB = null, LAST_QTY = '', ENTRY_MODE = null, TX_COUNT = 0;   // EDIT_FX: the original amount of the transaction being edited (entered before, or by an import), kept as it is
 async function account(id, msg = '', focus = null){
   FOCUS = focus;
   const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions'), meta()]);
@@ -297,6 +297,7 @@ async function account(id, msg = '', focus = null){
   const fixed = a.default_category || '';   // a default category: all the transactions are in it, the column and the field of the form are not needed
   const categoryField = fixed ? '' : `<label>Catégorie<select id="f_sub">${categoryOptions('')}</select></label>`;
   ENTRY_MODE = a.mode;
+  TX_COUNT = tr.length;
   LAST_QTY = tr.find(t => t.qty != null)?.qty ?? '';   // the transactions are the latest first
   const fields = modeFields(a, cur, LAST_QTY);
   const autoText = isAutoEntry(a) ? ' placeholder="automatique" title="Vide : \u00ab Delta \u2026 \u00bb est écrit automatiquement ; la catégorie vide devient Epargne"' : '';
@@ -314,6 +315,7 @@ async function account(id, msg = '', focus = null){
   <label>Catégorie par défaut<select id="a_defcat" onchange="setDefaultCategory('${jsq(a.id)}')">${categoryOptions(fixed)}</select></label>
   <button onclick="${a.status === 'Open' ? 'askCloseAccount' : 'reopenAccount'}('${jsq(a.id)}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
   <a href="/api/account/${enc(a.id)}/export.csv"><button>Exporter CSV</button></a>
+  <button class="danger" onclick="askDeleteAccount('${jsq(a.id)}')">Supprimer le compte</button>
   ${importer}</div>
   <div id="imp"></div><div class="ok">${esc(msg)}</div>
   <div class="card"><b id="form_title">Nouvelle écriture</b><div class="row"><label>Date<input type="date" id="f_date" value="${new Date().toISOString().slice(0, 10)}"></label>${fields}
@@ -374,6 +376,22 @@ async function askCloseAccount(id){
   const ok = await confirmDialog({title: 'Clôturer le compte ?', message: CLOSE_MESSAGE, strong: id, require: id, inputLabel: 'Nom du compte', confirmLabel: 'Clôturer le compte'});
   if (!ok) return;
   try { await setStatus(id, 'Closed'); } catch (e) { await errorDialog(e.message, CLOSE_REFUSED); }   // the server checks the balance too
+}
+/* Deleting an account: two confirmations, and the CSV export of its transactions in between, which the server requires and which can restore it.
+   The second confirmation asks for the name of the account. */
+async function askDeleteAccount(id){
+  const first = await confirmDialog({title: 'Supprimer le compte ?', strong: id, confirmLabel: 'Exporter et continuer',
+    message: `Le compte, ses ${TX_COUNT} écritures, ses versements et ses rendements seront définitivement supprimés. Pour pouvoir le restaurer, ses écritures vont d'abord être exportées en CSV (téléchargement).`});
+  if (!first) return;
+  location.assign('/api/account/' + enc(id) + '/export.csv');   // the server notes the export: without it, the deletion is refused
+  const second = await confirmDialog({title: 'Dernière confirmation', strong: id, require: id, inputLabel: 'Nom du compte', confirmLabel: 'Supprimer définitivement',
+    message: "Le fichier CSV du compte vient d'être téléchargé : conservez-le, c'est le seul moyen de restaurer le compte. Pour supprimer définitivement le compte, saisissez son nom :"});
+  if (!second) return;
+  try {
+    await api('account/' + enc(id), 'DELETE');
+    META = null;
+    location.hash = '#/';
+  } catch (e) { await errorDialog(e.message, 'Suppression impossible'); }
 }
 async function recalcOne(id){ await api('interests/recalc', 'POST', {account: id}); await account(id, 'Rendements recalculés'); }
 async function addDep(id){ try { await api('account/' + enc(id) + '/deposits', 'POST', {date: $('#d_date').value, amount: $('#d_amt').value}); await account(id, 'Versement ajouté'); } catch (e) { await errorDialog(e.message); } }

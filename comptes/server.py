@@ -1,9 +1,12 @@
 """Local web server (standard library only).  Run:  python -m comptes.server [port]"""
-import base64, csv, io, json, os, re, sys, mimetypes
+import base64, csv, io, json, os, re, sys, mimetypes, time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, unquote
 from .db import connect, DEFAULT_DB
 from . import calc, ops, budget, interest, bankimport, rates, search
+
+EXPORT_VALIDITY = 30 * 60   # seconds: an account is only deleted after an export of its transactions, made in the last 30 minutes
+EXPORTED: dict[str, tuple[float, int, int]] = {}   # account -> (when, number of transactions, number of deposits) at its last CSV export
 
 STATIC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 
@@ -138,6 +141,8 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("compte inconnu")
             sub = parts[2] if len(parts) > 2 else ""
             if sub == "":
+                if m == "DELETE":
+                    return {"deleted": self.delete_account(con, acc)}
                 if m == "PUT":
                     d = self._body()
                     if "status" in d: ops.set_status(con, acc, d["status"])
@@ -177,18 +182,37 @@ class Handler(BaseHTTPRequestHandler):
                 return self.export_csv(con, a)
         raise ValueError("route inconnue: " + path)
 
+    @staticmethod
+    def _counts(con, acc):
+        return (con.execute("SELECT COUNT(*) FROM transactions WHERE account=?", (acc,)).fetchone()[0],
+                con.execute("SELECT COUNT(*) FROM deposits WHERE account=?", (acc,)).fetchone()[0])
+
+    def delete_account(self, con, acc):
+        """Deletes the account, only if its transactions were exported (CSV) shortly before and nothing changed since: the file can restore it"""
+        exported = EXPORTED.get(acc)
+        if not exported or time.time() - exported[0] > EXPORT_VALIDITY:
+            raise ValueError("Exportez d'abord les écritures du compte en CSV (export de moins de 30 minutes) : il permet de le restaurer")
+        if exported[1:] != self._counts(con, acc):
+            raise ValueError("Le compte a changé depuis son export : exportez-le à nouveau")
+        deleted = ops.delete_account(con, acc)
+        EXPORTED.pop(acc, None)
+        return deleted
+
     def export_csv(self, con, a):
         acc = a["id"]
-        tr = con.execute("SELECT date,native_amount,native_balance,description,subcategory,fx_currency,fx_amount FROM transactions "
+        EXPORTED[acc] = (time.time(), *self._counts(con, acc))   # what a deletion of the account needs
+        tr = con.execute("SELECT date,native_amount,native_balance,description,subcategory,fx_currency,fx_amount,qty,price,in_budget FROM transactions "
                          "WHERE account=? ORDER BY date,id", (acc,)).fetchall()
         dep = con.execute("SELECT date,native_amount FROM deposits WHERE account=? ORDER BY date", (acc,)).fetchall()
         buf = io.StringIO(); w = csv.writer(buf, lineterminator="\n")
         meta = [f"ExportDate={__import__('datetime').datetime.now():%Y-%m-%d %H:%M:%S}", f"AccountId={acc}",
                 f"AccountNumber={a['number'] or ''}", f"Bank={a['bank'] or ''}", f"Availability={a['availability']}",
-                f"Currency={a['currency']}", f"Type={a['type']}", f"TaxRate={a['tax']}", f"NbrTransactions={len(tr)}"]
+                f"Currency={a['currency']}", f"Type={a['type']}", f"TaxRate={a['tax']}", f"NbrTransactions={len(tr)}",
+                f"Mode={a['mode']}", f"Status={a['status']}", f"InBudget={a['in_budget']}", f"DefaultCategory={a['default_category'] or ''}"]
         if dep: meta.append(f"NbrDeposits={len(dep)}")
         w.writerow(meta)
-        for r in tr: w.writerow(list(r))  # date, amount and balance in the account currency, description, subcategory, original currency and amount
+        # date, amount and balance in the account currency, description, subcategory, original currency and amount, number of shares, price, smoothing
+        for r in tr: w.writerow(list(r))
         for r in dep: w.writerow([r[0], r[1]])
         name = re.sub(r"[^\w.-]+", "_", acc) + ".csv"
         return (buf.getvalue().encode("utf-8"), "text/csv; charset=utf-8",
