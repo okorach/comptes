@@ -279,9 +279,9 @@ test('only the accounts that are not in the master currency show their balance i
   const {ctx, els} = masterPage('CHF');
   await ctx.home();
   const rows = plain(els['#main'].innerHTML).match(/<tr class="click".*?<\/tr>/gs);
-  assert.match(rows.find(r => r.includes('Courant')), /200,00 CHF<\/td><td class="n mut">100,00 €<\/td>/);   // EUR account: native balance shown, after the balance in the master currency
+  assert.match(rows.find(r => r.includes('Courant')), /200,00 CHF<\/td><td class="nw">[^<]*<\/td><td class="n mut">100,00 €<\/td>/);   // EUR account: native balance shown, after the balance in the master currency and its date
   const heads = [...els['#main'].innerHTML.match(/<table class="data"><thead><tr>(.*?)<\/tr>/s)[1].matchAll(/<th[^>]*>([^<]*?)(?: <button|<\/th>)/g)].map(m => m[1]);
-  assert.deepEqual(heads, ['Compte', 'Solde CHF', 'Solde (devise)', 'Type', 'Banque', 'Dernière MAJ']);
+  assert.deepEqual(heads, ['Compte', 'Solde CHF', 'Dernière MAJ', 'Solde (devise)', 'Type', 'Banque']);
   assert.doesNotMatch(rows.find(r => r.includes('Suisse')), /<td class="n mut">[^<\s]/);                // CHF account: it is the master currency
 });
 
@@ -560,7 +560,7 @@ test('the availability is not a column: it shows when hovering on the name of th
   assert.match(html, /<td title="Disponibilité: 2035">PER<\/td>/);
   assert.match(html, /<td title="Disponibilité: Immédiate">Courant<\/td>/);
   const row = html.match(/<tr class="click"[^>]*><td title="Disponibilité: 2035">.*?<\/tr>/s)[0];
-  assert.equal((row.match(/<td/g) || []).length, 6);   // name, balance, native balance, type, bank, last update
+  assert.equal((row.match(/<td/g) || []).length, 6);   // name, balance, last update, native balance, type, bank
   assert.ok(row.includes('<td class="nw">' + todayIso() + '</td>'));
 });
 
@@ -569,7 +569,7 @@ test('the accounts table is filterable by type, bank and date of the last update
   await ctx.home();
   const html = els['#main'].innerHTML;
   const filters = html.match(/<tr class="filters">(.*?)<\/tr>/s)[1];
-  assert.deepEqual([...filters.matchAll(/aria-label="Filtrer ([^"]+)"/g)].map(m => m[1]), ['Type', 'Banque', 'Dernière MAJ']);
+  assert.deepEqual([...filters.matchAll(/aria-label="Filtrer ([^"]+)"/g)].map(m => m[1]), ['Dernière MAJ', 'Type', 'Banque']);
   assert.equal((html.match(/class="sort"/g) || []).length, 6);
 });
 

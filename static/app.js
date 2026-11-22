@@ -96,8 +96,8 @@ let NETWORTH_TALL = false;
 function toggleNetworthHeight(){ NETWORTH_TALL = !NETWORTH_TALL; return home(); }
 const homeColumns = () => [
   {label: 'Compte', filter: false, value: a => a.id}, {label: 'Solde ' + sym(MASTER), num: true, filter: false, value: a => a.balance_main},
-  {label: 'Solde (devise)', num: true, filter: false, value: a => a.currency === MASTER ? null : a.balance_native}, {label: 'Type', value: a => a.type}, {label: 'Banque', value: a => a.bank},
   {label: 'Dernière MAJ', filter: 'range', input: 'date', value: a => a.last_date ? a.last_date.slice(0, 10) : null},   // the date of the last transaction, or of the last balance for the accounts kept by their balance
+  {label: 'Solde (devise)', num: true, filter: false, value: a => a.currency === MASTER ? null : a.balance_native}, {label: 'Type', value: a => a.type}, {label: 'Banque', value: a => a.bank},
 ];
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 /* Bubbles right of the name of an account, flagging what needs attention; red is the worse, orange the lesser. The tooltip gives the last update. */
@@ -124,7 +124,7 @@ function homeTotal(rows){
   const total = rows.reduce((t, a) => t + a.balance_main, 0);
   return `<tr class="total"><td class="s">Total</td><td class="n ${cls(total)}">${num(total)}</td><td></td><td></td><td></td><td></td></tr>`;
 }
-const homeRow = a => `<tr class="click${a.status === 'Closed' ? ' closed' : ''}" onclick="location.hash='#/account/${enc(a.id)}'"><td title="${esc(availabilityText(a))}">${esc(a.id)}${staleBubble(a)}</td><td class="n ${a.status === 'Closed' ? '' : cls(a.balance_main)}">${num(a.balance_main)}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td><td class="nw">${esc(a.last_date ? a.last_date.slice(0, 10) : '–')}</td></tr>`;
+const homeRow = a => `<tr class="click${a.status === 'Closed' ? ' closed' : ''}" onclick="location.hash='#/account/${enc(a.id)}'"><td title="${esc(availabilityText(a))}">${esc(a.id)}${staleBubble(a)}</td><td class="n ${a.status === 'Closed' ? '' : cls(a.balance_main)}">${num(a.balance_main)}</td><td class="nw">${esc(a.last_date ? a.last_date.slice(0, 10) : '–')}</td><td class="n mut">${a.currency === MASTER ? '' : num(a.balance_native, sym(a.currency))}</td><td>${esc(a.type)}</td><td>${esc(a.bank)}</td></tr>`;
 
 /* ------------------------------------------------------------------ spending */
 let SP = {group: 'month', matrixGroup: 'month', months: 36, exclude: null};
