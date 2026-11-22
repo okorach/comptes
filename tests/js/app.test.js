@@ -829,6 +829,38 @@ test('an account of a bank whose export can be found has a button to import the 
   assert.doesNotMatch(other.els['#main'].innerHTML, /importLatest/);
 });
 
+test('a share account entry form: the number of shares is the one of the previous entry, the price is the field to type and is required; the description is automatic', async () => {
+  const calls = [];
+  const page = (type, mode, txs) => load(async (url, init) => {
+    calls.push({url, method: init?.method, body: init?.body && JSON.parse(init.body)});
+    return {json: async () => (url.includes('transactions') ? (init?.method === 'POST' ? {id: 9} : txs) : url.endsWith('/meta') ? {categories: [], currencies: ['EUR', 'USD'], master_currency: 'EUR'}
+      : {account: {id: 'HPE', type, bank: 'B', currency: 'USD', status: 'Open', mode}, interests: null, deposits: []})};
+  });
+  const {ctx, els, mk} = page('Actions', 'shares', [{id: 2, date: '2026-11-13', qty: 1221.739, price: 48.09, native_balance: 1}, {id: 1, date: '2026-11-07', qty: 1200, price: 44.77, native_balance: 1}]);
+  await ctx.account('HPE');
+  const html = els['#main'].innerHTML;
+  assert.match(html, /<label>Nb de titres<input id="f_qty" size="10" value="1221\.739"[^>]*><\/label><label>Prix unitaire \*<input id="f_px" size="10" required><\/label>/);
+  assert.match(html, /<input id="f_desc" size="34" placeholder="automatique"/);
+  mk('#f_date').value = '2026-11-22'; mk('#f_qty').value = '1221.739'; mk('#f_px').value = '  ';
+  await ctx.saveTx('HPE');
+  assert.match(els['#form_err'].textContent, /Prix unitaire requis/);                      // nothing sent without a price
+  assert.equal(calls.some(c => c.method === 'POST'), false);
+  mk('#f_px').value = '40,91';
+  await ctx.saveTx('HPE');
+  assert.deepEqual([calls.find(c => c.method === 'POST').body.price, calls.find(c => c.method === 'POST').body.description], ['40,91', '']);   // the server writes the description
+  mk('#f_qty').value = '5'; mk('#f_px').value = '1';
+  ctx.resetForm();
+  assert.equal(els['#f_qty'].value, 1221.739);                                              // cancelling restores the number of the previous entry
+  assert.equal(els['#f_px'].value, '');
+  const av = page('Assurance Vie', 'snapshot', [{id: 1, date: '2026-11-07', native_balance: 5}]);
+  await av.ctx.account('AV');
+  assert.match(av.els['#main'].innerHTML, /<input id="f_desc" size="34" placeholder="automatique"/);
+  assert.doesNotMatch(av.els['#main'].innerHTML, /f_px/);
+  const plain = page('Courant', 'flow', []);
+  await plain.ctx.account('X');
+  assert.doesNotMatch(plain.els['#main'].innerHTML, /placeholder="automatique"/);
+});
+
 test('the closing button asks to close the account', async () => {
   const {ctx, els} = guardedPage();
   await ctx.account('Livret A');

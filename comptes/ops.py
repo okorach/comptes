@@ -31,7 +31,55 @@ def _original_amount(con: sqlite3.Connection, acc: str, d: dict) -> tuple[str | 
     return cur, amt, int(auto)
 
 
+DEFAULT_CATEGORY = "Epargne"                    # the category of the balances of the life insurances and of the shares
+SYMBOLS = {"USD": "$", "GBP": "£", "EUR": "€"}
+
+
+def _decimal_text(x: float, min_decimals: int, max_decimals: int) -> str:
+    """The number the way the descriptions write it: a comma, no useless zeros after min_decimals (28.5 -> '28,50', 1221.739 -> '1221,739')"""
+    whole, _, fraction = f"{x:.{max_decimals}f}".partition(".")
+    fraction = fraction.rstrip("0").ljust(min_decimals, "0")
+    return f"{whole},{fraction}" if fraction else whole
+
+
+def _entry_defaults(con: sqlite3.Connection, acc: str, d: dict) -> dict:
+    """What an entry of a life insurance (a balance) or of a share account (a price) gets when not given: the category, the description
+    ("Delta Solde 2026-11-07", "Delta 2026-10-30: 1248,938 shares @ $28,86 / 1,11 (USD vers EUR)": the date is the one of the previous
+    entry) and, for the shares, the number of shares of the previous entry. The price is the only thing the shares need. A new dict."""
+    a = con.execute("SELECT type,mode,currency FROM accounts WHERE id=?", (acc,)).fetchone()
+    kind = (a["type"], a["mode"])
+    if kind not in (("Assurance Vie", "snapshot"), ("Actions", "shares")):
+        return d
+    d = dict(d)
+    previous = con.execute("SELECT date,qty FROM transactions WHERE account=? AND date<=? ORDER BY date DESC, id DESC LIMIT 1",
+                           (acc, d["date"])).fetchone()
+    since = previous["date"] if previous else d["date"]
+    if not (d.get("subcategory") or "").strip():
+        d["subcategory"] = DEFAULT_CATEGORY
+    if kind[0] == "Assurance Vie":
+        if not (d.get("description") or "").strip():
+            d["description"] = f"Delta Solde {since}"
+        return d
+    if _f(d.get("price")) is None:
+        raise ValueError("Prix unitaire requis")
+    if _f(d.get("qty")) is None:
+        last_qty = con.execute("SELECT qty FROM transactions WHERE account=? AND date<=? AND qty IS NOT NULL ORDER BY date DESC, id DESC LIMIT 1",
+                               (acc, d["date"])).fetchone()
+        if not last_qty:
+            raise ValueError("Nombre de titres requis (aucune écriture précédente)")
+        d["qty"] = last_qty["qty"]
+    if not (d.get("description") or "").strip():
+        price, cur = _f(d["price"]), a["currency"]
+        text = f"Delta {since}: {_decimal_text(_f(d['qty']), 0, 6)} shares @ {SYMBOLS.get(cur, cur + ' ')}{_decimal_text(price, 2, 4)}"
+        master = calc.master_currency(con)
+        if cur != master:   # the price in the currency of the account, and the rate that converts it to the currency of the application
+            text += f" / {_decimal_text(calc.Fx(con).rate(cur, d['date']), 2, 4)} ({cur} vers {master})"
+        d["description"] = text
+    return d
+
+
 def add_transaction(con, acc, d):
+    d = _entry_defaults(con, acc, d)
     fx_cur, fx_amt, fx_auto = _original_amount(con, acc, d)
     cur = con.execute(
         "INSERT INTO transactions(account,date,native_amount,native_balance,description,subcategory,in_budget,qty,price,"
