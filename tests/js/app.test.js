@@ -279,9 +279,9 @@ test('only the accounts that are not in the master currency show their balance i
   const {ctx, els} = masterPage('CHF');
   await ctx.home();
   const rows = plain(els['#main'].innerHTML).match(/<tr class="click".*?<\/tr>/gs);
-  assert.match(rows.find(r => r.includes('Courant')), /200,00 CHF<\/td><td class="n mut">100,00 €<\/td>/);   // EUR account: native balance shown, after the balance in the master currency
+  assert.match(rows.find(r => r.includes('Courant')), /200,00 CHF<\/td><td class="nw">[^<]*<\/td><td class="n mut">100,00 €<\/td>/);   // EUR account: native balance shown, after the balance in the master currency and its date
   const heads = [...els['#main'].innerHTML.match(/<table class="data"><thead><tr>(.*?)<\/tr>/s)[1].matchAll(/<th[^>]*>([^<]*?)(?: <button|<\/th>)/g)].map(m => m[1]);
-  assert.deepEqual(heads, ['Compte', 'Solde CHF', 'Solde (devise)', 'Type', 'Banque']);
+  assert.deepEqual(heads, ['Compte', 'Solde CHF', 'Dernière MAJ', 'Solde (devise)', 'Type', 'Banque']);
   assert.doesNotMatch(rows.find(r => r.includes('Suisse')), /<td class="n mut">[^<\s]/);                // CHF account: it is the master currency
 });
 
@@ -550,26 +550,27 @@ test('the blocks by category and by period of the spending page are collapsible,
 
 const todayIso = (monthsAgo = 0) => { const d = new Date(); d.setMonth(d.getMonth() - monthsAgo); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-test('availability and last date are no longer columns: the availability shows when hovering on the name of the account', async () => {
+test('the availability is not a column: it shows when hovering on the name of the account; the last update has a column', async () => {
   const {ctx, els} = masterPage('EUR', {accounts: [
     {id: 'PER', status: 'Open', type: 'Livret', bank: 'B', availability: 2035, last_date: todayIso(), currency: 'EUR', balance_main: 10, balance_native: 10},
     {id: 'Courant', status: 'Open', type: 'Courant', bank: 'B', availability: 0, last_date: todayIso(), currency: 'EUR', balance_main: 5, balance_native: 5}]});
   await ctx.home();
   const html = els['#main'].innerHTML;
-  assert.doesNotMatch(html, /Dispo\.|Dernière date/);
+  assert.doesNotMatch(html, /Dispo\./);
   assert.match(html, /<td title="Disponibilité: 2035">PER<\/td>/);
   assert.match(html, /<td title="Disponibilité: Immédiate">Courant<\/td>/);
   const row = html.match(/<tr class="click"[^>]*><td title="Disponibilité: 2035">.*?<\/tr>/s)[0];
-  assert.equal((row.match(/<td/g) || []).length, 5);   // name, type, bank, native balance, balance
+  assert.equal((row.match(/<td/g) || []).length, 6);   // name, balance, last update, native balance, type, bank
+  assert.ok(row.includes('<td class="nw">' + todayIso() + '</td>'));
 });
 
-test('the accounts table is filterable by type and bank only, and sortable on every column', async () => {
+test('the accounts table is filterable by type, bank and date of the last update, and sortable on every column', async () => {
   const {ctx, els} = masterPage('EUR');
   await ctx.home();
   const html = els['#main'].innerHTML;
   const filters = html.match(/<tr class="filters">(.*?)<\/tr>/s)[1];
-  assert.deepEqual([...filters.matchAll(/aria-label="Filtrer ([^"]+)"/g)].map(m => m[1]), ['Type', 'Banque']);
-  assert.equal((html.match(/class="sort"/g) || []).length, 5);
+  assert.deepEqual([...filters.matchAll(/aria-label="Filtrer ([^"]+)"/g)].map(m => m[1]), ['Dernière MAJ', 'Type', 'Banque']);
+  assert.equal((html.match(/class="sort"/g) || []).length, 6);
 });
 
 test('the accounts table ends with the total of the balance in the master currency, of the filtered accounts only', async () => {
@@ -577,7 +578,7 @@ test('the accounts table ends with the total of the balance in the master curren
   const {ctx, els, get} = masterPage('EUR', {accounts: [acc('A', 'X', 'Livret', 100), acc('B', 'Y', 'PEA', 250.5), acc('C', 'X', 'PEA', -50)]});
   await ctx.home();
   const total = () => plain(els['#main'].innerHTML.match(/<tfoot[^>]*>(.*?)<\/tfoot>/s)[1]);
-  assert.match(total(), /<tr class="total"><td class="s">Total<\/td><td class="n ">300,50 €<\/td><td><\/td><td><\/td><td><\/td><\/tr>/);
+  assert.match(total(), /<tr class="total"><td class="s">Total<\/td><td class="n ">300,50 €<\/td><td><\/td><td><\/td><td><\/td><td><\/td><\/tr>/);
   const id = Number(els['#main'].innerHTML.match(/id="tb-(\d+)"/)[1]);
   const bank = get('tables').get(id).cols.findIndex(c => c.label === 'Banque');
   ctx.tableFilter(id, bank, String(get('tables').get(id).cols[bank].options.indexOf('X')));   // only the accounts of bank X
