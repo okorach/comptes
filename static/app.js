@@ -275,13 +275,14 @@ const txColumns = (foreign, cur, hasFx, amounts = true, category = true) => [
   {label: 'Description', filter: 'text', value: t => t.description}, ...(category ? [{label: 'Catégorie', filter: 'checks', value: t => t.subcategory}] : []), {label: '', sort: false, filter: false, clearButton: true, value: () => null},
 ];
 /* Input fields of an entry, depending on the way the balance of the account is kept */
-function modeFields(a, cur){
+function modeFields(a, cur, lastQty = ''){
   if (a.mode === 'snapshot') return `<label>Solde (${cur})<input id="f_bal" size="12"></label>`;
-  if (a.mode === 'shares') return '<label>Nb de titres<input id="f_qty" size="10"></label><label>Prix unitaire<input id="f_px" size="10"></label>';
+  // shares: only the price is needed; the number of shares is the one of the previous entry, unless changed
+  if (a.mode === 'shares') return `<label>Nb de titres<input id="f_qty" size="10" value="${esc(lastQty)}" title="Par défaut : le nombre de titres de l'écriture précédente"></label><label>Prix unitaire *<input id="f_px" size="10" required></label>`;
   // one amount, in the currency of the account (its conversion to the currency of the application is computed by the server)
   return `<label>Montant (${cur})<input id="f_amt" size="12"></label>`;
 }
-let EDIT = null, EDIT_FX = {}, EDIT_SUB = null;   // EDIT_FX: the original amount of the transaction being edited (entered before, or by an import), kept as it is
+let EDIT = null, EDIT_FX = {}, EDIT_SUB = null, LAST_QTY = '', ENTRY_MODE = null;   // EDIT_FX: the original amount of the transaction being edited (entered before, or by an import), kept as it is
 async function account(id, msg = '', focus = null){
   FOCUS = focus;
   const [info, tr, m] = await Promise.all([api('account/' + enc(id)), api('account/' + enc(id) + '/transactions'), meta()]);
@@ -293,7 +294,10 @@ async function account(id, msg = '', focus = null){
   const categoryOptions = chosen => '<option value=""></option>' + m.categories.toSorted((a, b) => tableCompare(a.subcategory, b.subcategory)).map(c => `<option${c.subcategory === chosen ? ' selected' : ''}>${esc(c.subcategory)}</option>`).join('');
   const fixed = a.default_category || '';   // a default category: all the transactions are in it, the column and the field of the form are not needed
   const categoryField = fixed ? '' : `<label>Catégorie<select id="f_sub">${categoryOptions('')}</select></label>`;
-  const fields = modeFields(a, cur);
+  ENTRY_MODE = a.mode;
+  LAST_QTY = tr.find(t => t.qty != null)?.qty ?? '';   // the transactions are the latest first
+  const fields = modeFields(a, cur, LAST_QTY);
+  const autoText = isAutoEntry(a) ? ' placeholder="automatique" title="Vide : \u00ab Delta \u2026 \u00bb est écrit automatiquement ; la catégorie vide devient Epargne"' : '';
   const bankOptions = (info.import_formats ?? []).map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('');
   // the format of the file follows the bank of the account; the selector is only for a bank whose export we cannot read
   const formatSelect = info.import_format || !bankOptions ? '' : `<select id="imp_bank" title="Format du fichier">${bankOptions}</select>`;
@@ -311,15 +315,22 @@ async function account(id, msg = '', focus = null){
   ${importer}</div>
   <div id="imp"></div><div class="ok">${esc(msg)}</div>
   <div class="card"><b id="form_title">Nouvelle écriture</b><div class="row"><label>Date<input type="date" id="f_date" value="${new Date().toISOString().slice(0, 10)}"></label>${fields}
-  <label>Description<input id="f_desc" size="34"></label>${categoryField}
+  <label>Description<input id="f_desc" size="34"${autoText}></label>${categoryField}
   ${a.in_budget ? '<label>Lissage (mois)<input id="f_bud" size="4" placeholder="vide"></label>' : ''}
   <button class="primary" onclick="saveTx('${jsq(a.id)}')">Enregistrer</button><button onclick="resetForm()">Annuler</button></div><div id="form_err" class="err"></div></div>
   <div class="account-grid ${hasDep ? '' : 'solo'}"><div class="g-tx">${dataTable(txColumns(foreign, sym(a.currency), hasFx, showsAmount(a), !fixed), tr, t => txRow(t, foreign, a.id, hasFx, showsAmount(a), duplicates, !fixed), {noun: 'écritures'})}</div>
   ${hasDep ? yieldsPanel(info, a) + depositsPanel(info, a, cur) : ''}</div>`;
   EDIT = null;
+  $('#f_px')?.focus?.();   // shares: the price is what is typed
   $('#tx-' + focus)?.scrollIntoView?.({block: 'center'});
 }
-function resetForm(){ EDIT = null; $('#form_title').textContent = 'Nouvelle écriture'; ['f_amt', 'f_bal', 'f_qty', 'f_px', 'f_desc', 'f_bud'].forEach(i => { if ($('#' + i)) $('#' + i).value = ''; }); }
+/* The life insurances (a balance) and the share accounts (a price): the category and the description of an entry are completed by the server */
+const isAutoEntry = a => (a.type === 'Assurance Vie' && a.mode === 'snapshot') || (a.type === 'Actions' && a.mode === 'shares');
+function resetForm(){
+  EDIT = null; $('#form_title').textContent = 'Nouvelle écriture';
+  ['f_amt', 'f_bal', 'f_px', 'f_desc', 'f_bud'].forEach(i => { if ($('#' + i)) $('#' + i).value = ''; });
+  if ($('#f_qty')) $('#f_qty').value = LAST_QTY;
+}
 function editTx(t){
   EDIT = t.id; EDIT_FX = {fx_currency: t.fx_currency, fx_amount: t.fx_amount}; EDIT_SUB = t.subcategory; $('#form_title').textContent = 'Modifier l\'écriture #' + t.id;
   $('#f_date').value = t.date; $('#f_desc').value = t.description || '';
@@ -337,6 +348,7 @@ async function saveTx(id){
   const body = {date: g('f_date'), description: g('f_desc'), subcategory, native_amount: g('f_amt'), native_balance: g('f_bal'), qty: g('f_qty'), price: g('f_px'), in_budget: g('f_bud'), fx_currency: EDIT ? EDIT_FX.fx_currency : null, fx_amount: EDIT ? EDIT_FX.fx_amount : null};   // the original amount of an existing transaction is kept
   try {
     if (!body.date) throw new Error('Date requise');
+    if (ENTRY_MODE === 'shares' && !(body.price ?? '').trim()) throw new Error('Prix unitaire requis');   // a share account: the price is the only thing needed
     if (EDIT) await api('transaction/' + EDIT, 'PUT', body); else await api('account/' + enc(id) + '/transactions', 'POST', body);
     await account(id, 'Écriture enregistrée');
   } catch (e) { $('#form_err').textContent = e.message; }
