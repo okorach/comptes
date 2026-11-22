@@ -122,7 +122,8 @@ function tableFilterCell(id, col, i){
     return '<th class="s actions">' + icon + '</th>';
   }
   if (col.filter === false) return '<th></th>';
-  const cell = col.num ? '<th class="n">' : (col.fit ? '<th class="fit">' : '<th>');  // the filter of a numeric column sits under its right-aligned header
+  let cell = col.fit ? '<th class="fit">' : '<th>';
+  if (col.num) cell = '<th class="n">';  // the filter of a numeric column sits under its right-aligned header
   const label = `aria-label="Filtrer ${esc(col.label)}"`;
   if (col.filter === 'range' || col.filter === 'checks') {
     return `${cell}<button type="button" class="fbtn" id="tfb-${id}-${i}" ${label} onclick="tableOpenFilter(${id},${i},this)">filtrer</button></th>`;
