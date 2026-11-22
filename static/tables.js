@@ -103,7 +103,7 @@ function tableSort(id, i){
 
 function tableHeadCell(id, col, i){
   const btn = col.sort === false ? '' : ` <button class="sort" id="ts-${id}-${i}" title="Trier" aria-label="Trier par ${esc(col.label)}" onclick="tableSort(${id},${i})">⇅</button>`;
-  return `<th class="${col.num ? 'n' : ''}">${esc(col.label)}${btn}</th>`;
+  return `<th class="${col.num ? 'n' : ''}${col.fit ? ' fit' : ''}">${esc(col.label)}${btn}</th>`;
 }
 
 /* Text of the button of a filter with a pop-up: what is filtered, or "filtrer" */
@@ -122,7 +122,8 @@ function tableFilterCell(id, col, i){
     return '<th class="s actions">' + icon + '</th>';
   }
   if (col.filter === false) return '<th></th>';
-  const cell = col.num ? '<th class="n">' : '<th>';  // the filter of a numeric column sits under its right-aligned header
+  let cell = col.fit ? '<th class="fit">' : '<th>';
+  if (col.num) cell = '<th class="n">';  // the filter of a numeric column sits under its right-aligned header
   const label = `aria-label="Filtrer ${esc(col.label)}"`;
   if (col.filter === 'range' || col.filter === 'checks') {
     return `${cell}<button type="button" class="fbtn" id="tfb-${id}-${i}" ${label} onclick="tableOpenFilter(${id},${i},this)">filtrer</button></th>`;
