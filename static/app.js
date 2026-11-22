@@ -298,7 +298,10 @@ async function account(id, msg = '', focus = null){
   const formatSelect = info.import_format || !bankOptions ? '' : `<select id="imp_bank" title="Format du fichier">${bankOptions}</select>`;
   const importer = a.mode === 'flow' || a.mode === 'static'  // only the accounts that take amounts can import them
     ? `<label class="inline">Importer ${formatSelect}<input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : '';
-  $('#main').innerHTML = `<h2><span class="d">${esc(a.id)}</span> <span class="mut d" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
+  const last = tr.find(t => t.date <= new Date().toISOString().slice(0, 10));   // the transactions are the latest first: the balance of today is the one of the first that is not in the future
+  const balance = last?.balance_main ?? 0, nativeBalance = foreign ? `<div class="mut d">${num(last?.native_balance ?? 0, sym(a.currency))}</div>` : '';
+  $('#main').innerHTML = `<div class="account-head"><h2><span class="d">${esc(a.id)}</span> <span class="mut d" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
+  <div class="account-balance"><div class="mut">Solde</div><div class="big">${num(balance)}</div>${nativeBalance}</div></div>
   <div class="row">${focus ? '<button onclick="location.hash=\'#/search\'">← Retour à la recherche</button>' : '<button onclick="location.hash=\'#/\'">← Retour</button>'}
   <label>Catégorie par défaut<select id="a_defcat" onchange="setDefaultCategory('${jsq(a.id)}')">${categoryOptions(fixed)}</select></label>
   <button onclick="${a.status === 'Open' ? 'askCloseAccount' : 'reopenAccount'}('${jsq(a.id)}')">${a.status === 'Open' ? 'Clôturer' : 'Rouvrir'} le compte</button>
