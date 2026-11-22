@@ -296,8 +296,9 @@ async function account(id, msg = '', focus = null){
   const bankOptions = (info.import_formats ?? []).map(b => `<option ${b === bank ? 'selected' : ''}>${b}</option>`).join('');
   // the format of the file follows the bank of the account; the selector is only for a bank whose export we cannot read
   const formatSelect = info.import_format || !bankOptions ? '' : `<select id="imp_bank" title="Format du fichier">${bankOptions}</select>`;
+  const latestButton = info.latest_export ? `<button title="Importe le dernier fichier exporté du site de la banque, trouvé dans le dossier Téléchargements" onclick="importLatest('${jsq(a.id)}')">Importer le dernier export</button>` : '';
   const importer = a.mode === 'flow' || a.mode === 'static'  // only the accounts that take amounts can import them
-    ? `<label class="inline">Importer ${formatSelect}<input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>` : '';
+    ? `<label class="inline">Importer ${formatSelect}<input type="file" id="imp_file" accept=".csv,.xlsx,.txt" onchange="importPreview('${jsq(a.id)}')"></label>${latestButton}` : '';
   const last = tr.find(t => t.date <= new Date().toISOString().slice(0, 10));   // the transactions are the latest first: the balance of today is the one of the first that is not in the future
   const balance = last?.balance_main ?? 0, nativeBalance = foreign ? `<div class="mut d">${num(last?.native_balance ?? 0, sym(a.currency))}</div>` : '';
   $('#main').innerHTML = `<div class="account-head"><h2><span class="d">${esc(a.id)}</span> <span class="mut d" style="font-size:13px">${esc(a.type)} · ${esc(bank)} · ${esc(a.currency)} · ${esc(a.status)}${a.availability ? " · dispo " + esc(a.availability) : ""}</span></h2>
@@ -426,14 +427,20 @@ function b64(buf){
 }
 async function importPreview(id){
   const f = $('#imp_file').files[0]; if (!f) return;
-  IMPORT = {filename: f.name, data: b64(await f.arrayBuffer()), bank: $('#imp_bank')?.value};   // no selector: the server uses the format of the bank of the account
+  await importShow(id, {filename: f.name, data: b64(await f.arrayBuffer()), bank: $('#imp_bank')?.value});   // no selector: the server uses the format of the bank of the account
+}
+/* The file exported from the web site of the bank: the server finds the newest one in the downloads folder */
+function importLatest(id){ return importShow(id, {latest: true}); }
+async function importShow(id, request){
+  IMPORT = request;
   try {
     const r = await api('account/' + enc(id) + '/import', 'POST', IMPORT);
+    if (IMPORT.latest) IMPORT = {latest: true, name: r.filename};   // what is imported is the file that was shown
     const previewRow = p => `<tr><td>${p.date}</td><td class="n ${cls(p.amount)}">${num(p.amount)}</td><td>${esc(p.description)}</td></tr>`;
     const preview = r.new.slice(0, 200).map(previewRow).join('');
     const list = r.new.length ? `<div class="scroll" style="max-height:240px;overflow-y:auto"><table>${preview}</table></div>
     <button class="primary" onclick="importCommit('${jsq(id)}')">Importer ${r.new.length} écritures</button>` : '';
-    $('#imp').innerHTML = `<div class="card"><b>Import de ${esc(f.name)}</b> : ${r.new.length} nouvelle(s) écriture(s), ${r.duplicates} doublon(s) ignoré(s).
+    $('#imp').innerHTML = `<div class="card"><b>Import de ${esc(r.filename)}</b> : ${r.new.length} nouvelle(s) écriture(s), ${r.duplicates} doublon(s) ignoré(s).
     ${list}<button onclick="$('#imp').innerHTML=''">Fermer</button></div>`;
   } catch (e) { $('#imp').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
