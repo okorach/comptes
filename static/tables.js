@@ -104,7 +104,9 @@ function tableSort(id, i){
 
 function tableHeadCell(id, col, i, sort = null){
   const dir = sort?.col === i ? sort.dir : null;   // a table that starts sorted shows it on its header
-  const btn = col.sort === false ? '' : ` <button class="sort${dir ? ' on' : ''}" id="ts-${id}-${i}" title="${SORT_LABEL[dir] || 'Trier'}" aria-label="Trier par ${esc(col.label)}" onclick="tableSort(${id},${i})">${SORT_MARK[dir] || '⇅'}</button>`;
+  const on = dir ? ' on' : '', title = SORT_LABEL[dir] || 'Trier', mark = SORT_MARK[dir] || '⇅';
+  let btn = '';
+  if (col.sort !== false) btn = ` <button class="sort${on}" id="ts-${id}-${i}" title="${title}" aria-label="Trier par ${esc(col.label)}" onclick="tableSort(${id},${i})">${mark}</button>`;
   return `<th class="${col.num ? 'n' : ''}${col.fit ? ' fit' : ''}">${esc(col.label)}${btn}</th>`;
 }
 
