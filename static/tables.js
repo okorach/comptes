@@ -98,11 +98,15 @@ function tableSort(id, i){
   if (!t) return;
   if (t.sort?.col !== i) t.sort = {col: i, dir: 'asc'};
   else t.sort = t.sort.dir === 'asc' ? {col: i, dir: 'desc'} : null;
+  t.onSort?.(t.sort);   // the page can remember it
   tableRefresh(id);
 }
 
-function tableHeadCell(id, col, i){
-  const btn = col.sort === false ? '' : ` <button class="sort" id="ts-${id}-${i}" title="Trier" aria-label="Trier par ${esc(col.label)}" onclick="tableSort(${id},${i})">⇅</button>`;
+function tableHeadCell(id, col, i, sort = null){
+  const dir = sort?.col === i ? sort.dir : null;   // a table that starts sorted shows it on its header
+  const on = dir ? ' on' : '', title = SORT_LABEL[dir] || 'Trier', mark = SORT_MARK[dir] || '⇅';
+  let btn = '';
+  if (col.sort !== false) btn = ` <button class="sort${on}" id="ts-${id}-${i}" title="${title}" aria-label="Trier par ${esc(col.label)}" onclick="tableSort(${id},${i})">${mark}</button>`;
   return `<th class="${col.num ? 'n' : ''}${col.fit ? ' fit' : ''}">${esc(col.label)}${btn}</th>`;
 }
 
@@ -149,15 +153,15 @@ function tableWithOptions(col, rows){
    computed on the rows shown, so it follows the filters} */
 function dataTable(cols, rows, row, opt = {}){
   const id = ++tableSeq, c = cols.map(col => tableWithOptions(col, rows));
-  const t = {cols: c, rows, row, noun: opt.noun || 'lignes', footer: opt.footer, filters: c.map(() => null), sort: null};
+  const t = {cols: c, rows, row, noun: opt.noun || 'lignes', footer: opt.footer, filters: c.map(() => null), sort: opt.sort ?? null, onSort: opt.onSort};
   tables.set(id, t);
   tables.delete(id - 50);  // the page only shows a few tables at a time: keep the registry bounded
   const clearInRow = c.some(col => col.clearButton);   // else the button to clear the filters is next to the counter
   const clearLine = clearInRow ? '' : ` <button type="button" class="clear-filters" id="tclr-${id}" hidden onclick="tableClearFilters(${id})">Effacer les filtres</button>`;
   const foot = opt.footer ? '<tfoot id="tf-' + id + '">' + opt.footer(rows) + '</tfoot>' : '';
-  const head = c.map((col, i) => tableHeadCell(id, col, i)).join(''), filters = c.map((col, i) => tableFilterCell(id, col, i)).join('');
+  const head = c.map((col, i) => tableHeadCell(id, col, i, t.sort)).join(''), filters = c.map((col, i) => tableFilterCell(id, col, i)).join('');
   return `<div class="scroll" style="${opt.style || ''}"><table class="data"><thead><tr>${head}</tr><tr class="filters">${filters}</tr></thead>` +
-    `<tbody id="tb-${id}">${rows.map(row).join('')}</tbody>${foot}</table></div><div class="mut table-count"><span id="tc-${id}">${tableCount(t, rows.length)}</span>${clearLine}</div>`;
+    `<tbody id="tb-${id}">${tableRows(t).map(row).join('')}</tbody>${foot}</table></div><div class="mut table-count"><span id="tc-${id}">${tableCount(t, rows.length)}</span>${clearLine}</div>`;
 }
 
 /* ------------------------------------------------------------ pop-up of the filters on a range or on a list of values */

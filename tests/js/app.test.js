@@ -570,7 +570,31 @@ test('the accounts table is filterable by type, bank and date of the last update
   const html = els['#main'].innerHTML;
   const filters = html.match(/<tr class="filters">(.*?)<\/tr>/s)[1];
   assert.deepEqual([...filters.matchAll(/aria-label="Filtrer ([^"]+)"/g)].map(m => m[1]), ['Dernière MAJ', 'Type', 'Banque']);
-  assert.equal((html.match(/class="sort"/g) || []).length, 6);
+  assert.equal((html.match(/class="sort(?: on)?"/g) || []).length, 6);
+});
+
+test('the accounts of the overview are sorted by name at first, and the sort chosen is remembered when the page is left and come back to', async () => {
+  const acc = (id, balance_main) => ({id, status: 'Open', type: 'Livret', bank: 'B', availability: 0, last_date: todayIso(), currency: 'EUR', balance_main, balance_native: balance_main});
+  const {ctx, els, get} = masterPage('EUR', {accounts: [acc('Livret B', 300), acc('Compte A', 100), acc('PEA C', 200)]});
+  const namesIn = html => [...html.matchAll(/<tr class="click"[^>]*><td[^>]*>([^<]*)</g)].map(m => m[1]);
+  const names = () => namesIn(els['#main'].innerHTML);
+  const sortButton = i => els['#main'].innerHTML.match(new RegExp('<button class="([^"]*)" id="ts-\\d+-' + i + '"[^>]*>([^<]*)<'));
+  await ctx.home();
+  assert.deepEqual(names(), ['Compte A', 'Livret B', 'PEA C']);                           // by name, not by balance
+  assert.deepEqual(sortButton(0).slice(1), ['sort on', '▲']);                             // and the header says it
+  assert.deepEqual(sortButton(1).slice(1), ['sort', '⇅']);
+  const id = () => Number(els['#main'].innerHTML.match(/id="tb-(\d+)"/)[1]);
+  ctx.tableSort(id(), 1);                                                                  // by balance, ascending
+  ctx.tableSort(id(), 1);                                                                  // descending
+  assert.deepEqual(namesIn(els['#tb-' + id()].innerHTML), ['Livret B', 'PEA C', 'Compte A']);   // the body is redrawn in place
+  await ctx.home();                                                                        // leaving the page and coming back
+  assert.deepEqual(names(), ['Livret B', 'PEA C', 'Compte A']);
+  assert.deepEqual(sortButton(1).slice(1), ['sort on', '▼']);
+  ctx.tableSort(id(), 1);                                                                  // no sort any more: the original order (balance, biggest first)
+  assert.deepEqual(get('HOME_SORT'), null);
+  await ctx.home();
+  assert.deepEqual(names(), ['Livret B', 'PEA C', 'Compte A']);
+  assert.deepEqual(sortButton(0).slice(1), ['sort', '⇅']);
 });
 
 test('the accounts table ends with the total of the balance in the master currency, of the filtered accounts only', async () => {
