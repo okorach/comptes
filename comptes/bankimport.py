@@ -1,5 +1,5 @@
 """Bank file parsers (ports of the BankImport*.bas macros) + duplicate detection."""
-import csv, io, re, datetime as dt
+import csv, fnmatch, glob, io, os, re, datetime as dt
 from collections import Counter
 
 MONTHS = [("jan", 1), ("fév", 2), ("fev", 2), ("feb", 2), ("mar", 3), ("avr", 4), ("apr", 4), ("mai", 5), ("may", 5),
@@ -97,6 +97,35 @@ def import_format(bank: str | None) -> str | None:
     """Format of the file to import for an account of this bank: the bank itself when we can read its export, else None
     (the user then has to choose the format)"""
     return bank if bank in BANK_FORMATS else None
+
+
+EXPORT_FILES = {"BoursoBank": "export-operations-*.csv"}   # the names the banks give to the files they export (the ones we can find alone)
+
+
+def downloads_folder() -> str:
+    """Where the browser puts the downloaded files (COMPTES_DOWNLOADS to change it)"""
+    return os.environ.get("COMPTES_DOWNLOADS") or os.path.join(os.path.expanduser("~"), "Downloads")
+
+
+def latest_export(bank, account, subs, name=None, folder=None, scanned=10):
+    """(file name, content) of the export of the bank to import: the file called `name` if given, else the newest one of the downloads
+    folder that has transactions of this account (the exports of the accounts of a bank are named alike). ValueError when there is none."""
+    pattern = EXPORT_FILES.get(bank)
+    if not pattern:
+        raise ValueError("Pas de recherche automatique de l'export pour cette banque")
+    folder = folder or downloads_folder()
+    if name:
+        if os.path.basename(name) != name or not fnmatch.fnmatch(name, pattern):
+            raise ValueError("Nom de fichier d'export invalide")
+        with open(os.path.join(folder, name), "rb") as f:
+            return name, f.read()
+    newest = sorted(glob.glob(os.path.join(folder, pattern)), key=os.path.getmtime, reverse=True)[:scanned]
+    for path in newest:
+        with open(path, "rb") as f:
+            data = f.read()
+        if parse(bank, account, os.path.basename(path), data, subs):
+            return os.path.basename(path), data
+    raise ValueError(f"Aucun export {bank} de ce compte trouvé dans {folder}")
 
 
 def parse(bank, account, filename, data, subs):

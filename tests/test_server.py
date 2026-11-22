@@ -2,6 +2,7 @@ import base64
 import datetime as dt
 import json
 import os
+import tempfile
 import threading
 import unittest
 import urllib.error
@@ -210,9 +211,30 @@ class ServerTest(unittest.TestCase):
                 self.call("POST", "/api/account/Suisse/import", {"filename": "a.csv", "data": base64.b64encode(b"x").decode()})
                 self.call("POST", "/api/account/Suisse/import", {"filename": "a.csv", "bank": "LCL", "data": base64.b64encode(b"x").decode()})
             self.assertEqual([c.args[0] for c in parse.call_args_list], ["ING", "ING"])   # no format given, or another one: the bank wins
+            self._check_latest_export()
         finally:
-            self.con.execute("UPDATE accounts SET bank='BankB' WHERE id='Suisse'")
+            self.con.execute("UPDATE accounts SET bank='BankB', number=NULL WHERE id='Suisse'")
             self.con.commit()
+
+    def _check_latest_export(self):
+        """The export of the bank is found in the downloads folder: previewed, then imported as it was previewed"""
+        self.con.execute("UPDATE accounts SET bank='BoursoBank', number='00011122233' WHERE id='Suisse'")
+        self.con.commit()
+        head = ';' * 11 + '\n'   # the header line is skipped
+        with tempfile.TemporaryDirectory() as folder, mock.patch.dict(os.environ, {"COMPTES_DOWNLOADS": folder}):
+            self.assertTrue(self.call("GET", "/api/account/Suisse")["latest_export"])
+            self.assertFalse(self.call("GET", "/api/account/Courant")["latest_export"])
+            self.assertEqual(self.call("POST", "/api/account/Suisse/import", {"latest": True})["HTTP"], 400)      # no file yet
+            with open(os.path.join(folder, "export-operations-1.csv"), "w", encoding="utf-8") as f:
+                f.write(head + '2026-11-20;2026-11-20;"CARTE 16/11/26 Daily";Daily;c;p;-4,30;;00011122233;"Compte";1.0;N\n')
+            res = self.call("POST", "/api/account/Suisse/import", {"latest": True})
+            self.assertEqual((res["filename"], len(res["new"]), res["committed"]), ("export-operations-1.csv", 1, False))
+            res = self.call("POST", "/api/account/Suisse/import", {"latest": True, "name": res["filename"], "commit": True})
+            self.assertTrue(res["committed"])
+            self.assertEqual(self.call("POST", "/api/account/Suisse/import", {"latest": True})["duplicates"], 1)   # now known
+            self.assertEqual(self.call("POST", "/api/account/Suisse/import", {"latest": True, "name": "../x.csv"})["HTTP"], 400)
+        row = self.con.execute("SELECT id FROM transactions WHERE account='Suisse' AND date='2026-11-20'").fetchone()
+        self.call("DELETE", f"/api/transaction/{row[0]}")   # as it was
 
     def test_static_and_unknown(self):
         with urllib.request.urlopen(self.base + "/") as r:

@@ -1,5 +1,8 @@
 import datetime as dt
 import os
+import shutil
+import tempfile
+import time
 import unittest
 
 from helpers import make_db
@@ -61,3 +64,47 @@ class DuplicateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LatestExportTest(unittest.TestCase):
+    """The export file of the bank, found in the downloads folder"""
+    HEAD = ';' * 11 + '\n'   # the header line is skipped
+
+    def setUp(self):
+        self.folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.folder)
+        self.account = {"number": "00011122233", "currency": "EUR"}
+
+    def put(self, name, number, age=0):
+        path = os.path.join(self.folder, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(self.HEAD + f'2026-11-20;2026-11-20;"CARTE X";X;c;p;-4,30;;{number};"Compte";1.0;N\n')
+        os.utime(path, (time.time() - age, time.time() - age))
+
+    def find(self, name=None):
+        return bi.latest_export("BoursoBank", self.account, [], name, self.folder)
+
+    def test_the_newest_file_with_transactions_of_the_account_is_found(self):
+        self.put("export-operations-old.csv", "00011122233", age=100)
+        self.put("export-operations-other-account.csv", "99999", age=10)     # newer, but of another account
+        self.put("export-operations-new.csv", "00011122233", age=50)
+        self.put("notes.csv", "00011122233", age=0)                           # not named like an export of the bank
+        name, data = self.find()
+        self.assertEqual(name, "export-operations-new.csv")
+        self.assertIn(b"CARTE X", data)
+
+    def test_no_file_for_the_account(self):
+        self.put("export-operations-other-account.csv", "99999")
+        with self.assertRaises(ValueError):
+            self.find()
+
+    def test_a_named_file_must_look_like_an_export_of_the_bank_and_stay_in_the_folder(self):
+        self.put("export-operations-a.csv", "00011122233")
+        self.assertEqual(self.find("export-operations-a.csv")[0], "export-operations-a.csv")
+        for name in ("../export-operations-a.csv", "notes.csv", "sub/export-operations-a.csv"):
+            with self.assertRaises(ValueError):
+                self.find(name)
+
+    def test_banks_without_a_known_file_name(self):
+        with self.assertRaises(ValueError):
+            bi.latest_export("ING", self.account, [], None, self.folder)

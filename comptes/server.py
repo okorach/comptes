@@ -146,7 +146,8 @@ class Handler(BaseHTTPRequestHandler):
                 dep = con.execute("SELECT * FROM deposits WHERE account=? ORDER BY date DESC", (acc,)).fetchall()
                 it = con.execute("SELECT * FROM interests WHERE account=?", (acc,)).fetchone()
                 return {"account": dict(a), "deposits": [dict(r) for r in dep], "interests": dict(it) if it else None,
-                        "import_format": bankimport.import_format(a["bank"]), "import_formats": [*bankimport.BANK_FORMATS, bankimport.GENERIC_FORMAT]}
+                        "import_format": bankimport.import_format(a["bank"]), "latest_export": a["bank"] in bankimport.EXPORT_FILES,
+                        "import_formats": [*bankimport.BANK_FORMATS, bankimport.GENERIC_FORMAT]}
             if sub == "transactions":
                 if m == "POST":
                     return {"id": ops.add_transaction(con, acc, self._body())}
@@ -163,11 +164,15 @@ class Handler(BaseHTTPRequestHandler):
                 d = self._body()
                 subs = [(r[0], r[1]) for r in con.execute("SELECT pattern,replacement FROM substitutions ORDER BY id")]
                 bank = bankimport.import_format(a["bank"]) or d.get("bank") or a["bank"]   # the format follows the bank when it is known
-                parsed = bankimport.parse(bank, a, d["filename"], base64.b64decode(d["data"]), subs)
+                if d.get("latest"):   # the file exported from the web site of the bank, found in the downloads folder
+                    d["filename"], content = bankimport.latest_export(bank, a, subs, d.get("name"))
+                else:
+                    content = base64.b64decode(d["data"])
+                parsed = bankimport.parse(bank, a, d["filename"], content, subs)
                 new, dup = bankimport.split_new(con, acc, parsed)
                 if d.get("commit"):
                     bankimport.commit_new(con, acc, new)
-                return {"new": new, "duplicates": len(dup), "committed": bool(d.get("commit"))}
+                return {"new": new, "duplicates": len(dup), "committed": bool(d.get("commit")), "filename": d["filename"]}
             if sub == "export.csv":
                 return self.export_csv(con, a)
         raise ValueError("route inconnue: " + path)

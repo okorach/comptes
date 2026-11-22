@@ -808,6 +808,26 @@ test('adding a category asks for its general category in the same window; both a
   await done;
 });
 
+test('an account of a bank whose export can be found has a button to import the latest export; the preview shows the file, the import takes that same file', async () => {
+  const calls = [];
+  const {ctx, els} = load(async (url, init) => {
+    calls.push({url, body: init?.body && JSON.parse(init.body)});
+    if (url.endsWith('/import')) return {json: async () => ({new: [{date: '2026-11-20', amount: -4.3, description: 'Daily'}], duplicates: 2, committed: false, filename: 'export-operations-1.csv'})};
+    return {json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR'}
+      : {account: {id: 'Perso', type: 'Courant', bank: 'BoursoBank', currency: 'EUR', status: 'Open', mode: 'flow'}, interests: null, deposits: [], import_format: 'BoursoBank', latest_export: true})};
+  });
+  await ctx.account('Perso');
+  assert.match(els['#main'].innerHTML, /<button title="Importe le dernier fichier[^"]*" onclick="importLatest\('Perso'\)">Importer le dernier export<\/button>/);
+  await ctx.importLatest('Perso');
+  assert.deepEqual(calls.find(c => c.url.endsWith('/import')).body, {latest: true});
+  assert.match(els['#imp'].innerHTML, /Import de export-operations-1\.csv<\/b> : 1 nouvelle\(s\) écriture\(s\), 2 doublon\(s\)/);
+  await ctx.importCommit('Perso');
+  assert.deepEqual(calls.filter(c => c.url.endsWith('/import')).at(-1).body, {latest: true, name: 'export-operations-1.csv', commit: true});
+  const other = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR'} : {...FX_ACCOUNT, latest_export: false})}));
+  await other.ctx.account('Suisse');
+  assert.doesNotMatch(other.els['#main'].innerHTML, /importLatest/);
+});
+
 test('the closing button asks to close the account', async () => {
   const {ctx, els} = guardedPage();
   await ctx.account('Livret A');
