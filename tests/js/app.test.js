@@ -189,6 +189,19 @@ test('the date of a transaction never wraps (a nowrap cell), in the account and 
   assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../static/style.css'), 'utf8'), /td\.nw\{white-space:nowrap\}/);
 });
 
+test('the balance of the account is shown at the top right, big like the net worth: the one of today, in the currency of the application, and in the one of the account below it', async () => {
+  const future = new Date(Date.now() + 40 * 86400000).toISOString().slice(0, 10);
+  const txs = [{...TX, id: 3, date: future, balance_main: 999, native_balance: 999}, {...TX, id: 2, date: '2024-01-02', balance_main: -80, native_balance: -160}, {...TX, id: 1, balance_main: 5, native_balance: 10}];
+  const {ctx, els} = fxPage(txs);
+  await ctx.account('Suisse');
+  const html = els['#main'].innerHTML;
+  assert.match(html, /^<div class="account-head"><h2><span class="d">Suisse<\/span>[\s\S]*<\/h2>\s*<div class="account-balance"><div class="mut">Solde<\/div><div class="big">[^<]*80[^<]*<\/div><div class="mut d">[^<]*160[^<]*<\/div><\/div><\/div>/);
+  assert.doesNotMatch(html, /<div class="big">999/);                       // a transaction in the future is not in the balance of today
+  const same = load(async url => ({json: async () => (url.includes('transactions') ? [{...TX, balance_main: 42}] : url.endsWith('/meta') ? {categories: [], currencies: ['EUR'], master_currency: 'EUR'} : {...FX_ACCOUNT, account: {...FX_ACCOUNT.account, currency: 'EUR'}})}));
+  await same.ctx.account('Suisse');
+  assert.match(same.els['#main'].innerHTML, /<div class="big">42[^<]*<\/div><\/div><\/div>/);   // same currency: no second line
+});
+
 test('balance and snapshot accounts do not take an original amount', async () => {
   const {ctx, els} = load(async url => ({json: async () => (url.includes('transactions') ? [] : url.endsWith('/meta') ? FX_META : {...FX_ACCOUNT, account: {...FX_ACCOUNT.account, mode: 'snapshot'}})}));
   await ctx.account('Suisse');

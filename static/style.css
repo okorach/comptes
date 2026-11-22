@@ -18,6 +18,7 @@ td.s,td a,td button{font-family:var(--font)}
 tr.total td{font-size:16px;font-weight:700;border-bottom:0;border-top:2px solid var(--line)}
 tr.hl td{background:rgba(255,190,0,.28)}
 /* title of a block followed by its controls */
+.account-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:4px 16px} .account-balance{text-align:right} .account-balance .big{margin-bottom:2px}
 .title-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px}
 /* Modal windows (static/modal.js) */
 .modal-back{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,18,24,.5);backdrop-filter:blur(2px);animation:modal-fade .15s ease-out}
