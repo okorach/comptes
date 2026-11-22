@@ -86,11 +86,13 @@ async function home(){
   ${drawChart(nw.map(p => p.month), [
     {name: `Épargne mensuelle (moy. ${SAVINGS_MONTHS} mois)`, color: 'var(--pos-light)', type: 'bar', axis: 'right', unit: sym(MASTER) + '/mois', values: monthlySavings(nw.map(p => p.total))},
     {name: 'Patrimoine', color: 'var(--acc)', type: 'line', values: nw.map(p => p.total)}], {xticks: 12, unit: sym(MASTER), height: NETWORTH_TALL ? 420 : 280})}
-  <div class="title-row"><h3>Comptes</h3><label><input type="checkbox" id="showClosed" ${open ? '' : 'checked'} onchange="home()"> Montrer les comptes fermés</label></div>${dataTable(homeColumns(), shown.sort((a, b) => b.balance_main - a.balance_main), homeRow, {noun: 'comptes', footer: homeTotal})}
+  <div class="title-row"><h3>Comptes</h3><label><input type="checkbox" id="showClosed" ${open ? '' : 'checked'} onchange="home()"> Montrer les comptes fermés</label></div>${dataTable(homeColumns(), shown.sort((a, b) => b.balance_main - a.balance_main), homeRow, {noun: 'comptes', footer: homeTotal, sort: HOME_SORT, onSort: s => { HOME_SORT = s; }})}
   <div class="row" style="align-items:start">${paneStart('bank', 'Par banque')}${tbl(sumBy(a => a.bank))}</details>
   ${paneStart('year', 'Par année de disponibilité')}${tbl(Object.entries(byYear).sort((a, b) => a[0] - b[0]).map(([k, v]) => [k === '0' ? 'Immédiate' : k, v]))}</details>
   ${paneStart('type', 'Par type')}${tbl(sumBy(a => a.type))}</details></div>`;
 }
+/* The sort of the accounts table: by name at first, then what the user chose (also none), kept when leaving the page and coming back */
+let HOME_SORT = {col: 0, dir: 'asc'};
 /* The patrimoine chart has the default height; a button shows it 50 % taller (420 instead of 280) until the next navigation */
 let NETWORTH_TALL = false;
 function toggleNetworthHeight(){ NETWORTH_TALL = !NETWORTH_TALL; return home(); }
