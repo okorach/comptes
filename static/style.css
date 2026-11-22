@@ -50,7 +50,8 @@ input,select,button{font:inherit;font-family:var(--font);padding:4px 7px;border:
 button{cursor:pointer;background:var(--card)} button.primary{background:var(--acc);color:#fff;border-color:var(--acc)}
 .admin-pair{display:flex;flex-wrap:wrap;column-gap:14px;align-items:flex-start} .admin-pair>.card{flex:1 1 280px;min-width:0} .admin-pair>.card:last-child{flex:3 1 650px}  /* side by side, one above the other on a narrow window */
 .vsep{align-self:stretch;border-left:1px solid var(--line);margin:0 6px} .fx-details>summary{cursor:pointer;margin-top:8px}
-td.nw{white-space:nowrap}  /* a date never wraps: the description is the column that gives way */
+td.nw{white-space:nowrap}
+th.fit,td.fit{width:1%;white-space:nowrap}   /* a column as narrow as its title (and its content) needs */  /* a date never wraps: the description is the column that gives way */
 td.actions{white-space:nowrap;width:1%}  /* the two icons of a row stay on one line */
 button.icon{border:0;background:none;color:var(--mut);padding:3px 5px;line-height:0;border-radius:4px} button.icon:hover{color:var(--acc);background:rgba(127,127,127,.12)}
 button.link{border:0;background:none;color:var(--acc);padding:0 4px}
